@@ -90,6 +90,14 @@ class CatalogTests(unittest.TestCase):
             fetch.assert_called_once_with('Microsoft.OfficeDeploymentTool')
             self.assertEqual((app['architecture'], app['bootstrapArchitecture'], app['type']), ('x64', 'x86', 'office-odt'))
 
+    def test_anydesk_prefers_x64_if_vendor_adds_it(self):
+        data = self.fixture('x86', 'exe')
+        data['InstallerSwitches'] = {'Silent': '--silent'}
+        data['Installers'].append({**data['Installers'][0], 'Architecture': 'x64'})
+        with patch('catalog.get_manifest', return_value=('10.0', data)):
+            app = resolve({'id': 'AnyDesk.AnyDesk', 'name': 'AnyDesk', 'allowX86': True})
+            self.assertEqual(app['architecture'], 'x64')
+
     def test_issue_crlf_and_optional_publisher(self):
         app = parse('### ID de WinGet\r\n\r\n7zip.7zip\r\n\r\n### Nombre\r\n\r\n7-Zip\r\n\r\n### Fabricante\r\n\r\n_No response_')
         self.assertEqual(app, {'id': '7zip.7zip', 'name': '7-Zip', 'publisher': ''})

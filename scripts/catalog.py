@@ -134,7 +134,12 @@ def resolve(app):
                 "arguments": "/configure", "successCodes": [0, 3010]}
     version, manifest = get_manifest(package)
     portable = package == "TeamViewer.TeamViewer.QuickSupport"
-    installer = select_installer(manifest, "x86" if app.get("allowX86") else "x64", portable)
+    try:
+        installer = select_installer(manifest, "x64", portable)
+    except ValueError:
+        if not app.get("allowX86"):
+            raise
+        installer = select_installer(manifest, "x86", portable)
     if portable:
         installer["sha256"] = official_quicksupport_hash(installer["url"])
         version = "Última oficial"
