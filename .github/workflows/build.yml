@@ -28,6 +28,13 @@ jobs:
         run: |
           $test = Start-Process ./dist/ISOE.exe -ArgumentList '--self-test' -Wait -PassThru
           if ($test.ExitCode -ne 0) { throw 'Validación del cliente fallida' }
+      - name: Probar configuración Office y preparación portable
+        shell: pwsh
+        run: |
+          & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:exe /platform:x64 /out:dist\ClientTests.exe /reference:dist\ISOE.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll tests\ClientTests.cs
+          if ($LASTEXITCODE -ne 0) { throw 'No se pudieron compilar las pruebas' }
+          $test = Start-Process ./dist/ClientTests.exe -Wait -PassThru
+          if ($test.ExitCode -ne 0) { throw 'Pruebas del cliente fallidas' }
       - uses: actions/upload-artifact@v4
         with:
           name: ISOE-windows-x64

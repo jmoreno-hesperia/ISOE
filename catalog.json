@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-11-03T14:04:03.290209+00:00",
+  "updatedAt": "2026-11-03T14:16:38.763876+00:00",
   "apps": [
     {
       "id": "Adobe.Acrobat.Reader.64-bit",
@@ -56,9 +56,20 @@
     {
       "id": "AnyDesk.AnyDesk",
       "name": "AnyDesk",
-      "publisher": "AnyDesk",
       "available": false,
-      "reason": "Sin instalador x64 silencioso compatible (o requiere dependencias/WinGet)."
+      "reason": "Requiere ISOE v1.1.0 o posterior"
+    },
+    {
+      "id": "Microsoft.Office",
+      "name": "Microsoft 365 (Office)",
+      "available": false,
+      "reason": "Requiere ISOE v1.1.0 o posterior"
+    },
+    {
+      "id": "TeamViewer.TeamViewer.QuickSupport",
+      "name": "TeamViewer QuickSupport",
+      "available": false,
+      "reason": "Requiere ISOE v1.1.0 o posterior"
     }
   ]
 }

@@ -39,7 +39,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add apps.json catalog.json
+          git add apps.json catalog.json catalog-v2.json
           git commit -m 'Añadir software aprobado a ISOE'
           git push
       - uses: actions/github-script@v7

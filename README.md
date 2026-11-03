@@ -1,6 +1,6 @@
 # ISOE — Install Software on Enterprises
 
-Cliente nativo y ligero para instalar software de **64 bits** en Windows, en cola y en silencio. No necesita WinGet, Python ni .NET moderno en el equipo destino: utiliza .NET Framework de Windows.
+Cliente nativo y ligero para instalar software de **64 bits** en Windows, en cola y en silencio. La única excepción autorizada es **AnyDesk x86**, compatible con Windows x64. No necesita WinGet, Python ni .NET moderno en el equipo destino: utiliza .NET Framework de Windows.
 
 ## Descargar y usar
 
@@ -20,9 +20,23 @@ La descarga tiene porcentaje real cuando el servidor comunica su tamaño. Durant
 | Adobe Acrobat Reader | `Adobe.Acrobat.Reader.64-bit` | Instalador x64 |
 | Java Runtime 8 | `Oracle.JavaRuntimeEnvironment` | Instalador x64; se aplican las condiciones de Oracle |
 | 7-Zip | `7zip.7zip` | Instalador x64 |
-| AnyDesk | `AnyDesk.AnyDesk` | Visible pero bloqueado si no existe instalador x64 compatible |
+| AnyDesk | `AnyDesk.AnyDesk` | Ejecutable oficial x86; excepción autorizada explícitamente |
+| Microsoft 365 (Office) | `Microsoft.Office` | Office x64 en español; elegir Business o Enterprise |
+| TeamViewer QuickSupport | `TeamViewer.TeamViewer.QuickSupport` | Paquete portable oficial x64; se prepara sin abrirlo |
 
-**Compatible con Windows x64 no significa que una aplicación sea de 64 bits.** ISOE nunca recurre a x86, ARM64 o arquitectura neutral. Algunos programas, como AnyDesk en el catálogo actual, no cumplen este requisito. Los programas con dependencias, instaladores solo por usuario, paquetes portables/ZIP/MSIX o parámetros silenciosos desconocidos se rechazan en esta primera versión.
+**Compatible con Windows x64 no significa que una aplicación sea de 64 bits.** ISOE rechaza x86, ARM64 y arquitectura neutral salvo la excepción concreta de AnyDesk (`allowX86: true`), visible en la interfaz. Ese permiso no puede aplicarse a otros programas. Los programas con dependencias, instaladores solo por usuario, ZIP/MSIX o parámetros silenciosos desconocidos siguen rechazándose.
+
+## Microsoft 365 y QuickSupport
+
+Se necesita **ISOE v1.1.0 o posterior** para estas incorporaciones. Las versiones anteriores conservan un catálogo compatible que indica que deben actualizarse.
+
+**Microsoft 365:** al seleccionar Office, ISOE permite elegir Microsoft 365 Business u Office Apps for enterprise (E3/E5). El producto debe corresponder a vuestra licencia. Descarga el Office Deployment Tool de Microsoft, verifica su SHA-256 y su firma digital, extrae y verifica `setup.exe` y ejecuta `/download` y `/configure` con `OfficeClientEdition="64"`, idioma español y `Display Level="None"`. Los archivos de Office se descargan en `C:\Temp\ISOE\<ejecución>\Office365`. ODT es un extractor de 32 bits que despliega **Office de 64 bits**; su arquitectura no es la del Office instalado. La versión mostrada corresponde a ODT; Office se obtiene del canal Current.
+
+La configuración no elimina Office existente, no migra su arquitectura ni fuerza el cierre de documentos. Cierra las aplicaciones de Office antes de comenzar. Si ya hay Office de 32 bits, la instalación puede fallar por incompatibilidad; ISOE no lo desinstala automáticamente. La activación se realiza después con una cuenta con licencia. Las fases de descarga e instalación de ODT muestran actividad, sin porcentaje inventado. Detener la cola espera a que termine la fase activa de ODT.
+
+**TeamViewer QuickSupport:** no es un instalador convencional. ISOE descarga el paquete oficial x64, verifica SHA-256 y firma de TeamViewer, lo copia a `%ProgramFiles%\ISOE\Tools\TeamViewer.TeamViewer.QuickSupport\TeamViewerQS.exe` y crea un acceso directo común en el escritorio. No lo ejecuta ni inicia sesiones de soporte. La distribución x64 del fabricante puede utilizar un extractor x86 para el contenido x64. El uso atendido y la aceptación de avisos de TeamViewer se realizan al abrirlo manualmente.
+
+**AnyDesk:** se instala silenciosamente desde su enlace oficial, comprobando SHA-256 y la firma de AnyDesk. Se identifica como x86 en la interfaz. No se configuran contraseñas de acceso desatendido ni conexiones remotas.
 
 ## Añadir aplicaciones con un formulario
 
@@ -37,13 +51,13 @@ No se insertan respuestas de issues en comandos de shell ni se almacenan tokens 
 
 ## Actualización automática de enlaces
 
-`apps.json` contiene los programas aprobados. **Actualizar catálogo x64** se ejecuta cada día a las 05:17 UTC y también puede iniciarse desde Actions → Run workflow. Consulta los manifiestos públicos de [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs), selecciona la versión más alta publicada y guarda URL, versión, SHA-256 y argumentos silenciosos en `catalog.json`.
+`apps.json` contiene los programas aprobados. **Actualizar catálogo x64** se ejecuta cada día a las 05:17 UTC y también puede iniciarse desde Actions → Run workflow. Consulta los manifiestos públicos de [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs), selecciona la versión más alta publicada y guarda URL, versión, SHA-256 y argumentos silenciosos en `catalog-v2.json`. También genera `catalog.json` para clientes antiguos.
 
-El cliente lee `catalog.json` desde este repositorio al abrirse o al pulsar **Actualizar catálogo**. Así recibe enlaces nuevos sin recompilar. Si el repositorio es privado, este cliente no podrá descargar el catálogo sin una solución adicional de autenticación; nunca incrustes un token personal en el ejecutable.
+El cliente lee `catalog-v2.json` desde este repositorio al abrirse o al pulsar **Actualizar catálogo**. Así recibe enlaces nuevos sin recompilar. Si el repositorio es privado, este cliente no podrá descargar el catálogo sin una solución adicional de autenticación; nunca incrustes un token personal en el ejecutable.
 
 Si GitHub no responde, el cliente conserva el catálogo ya cargado o utiliza el incluido dentro del ejecutable. Muestra su fecha y avisa de que no ha podido actualizarlo. Las descargas siguen requiriendo Internet y un SHA-256 coincidente. Esto permite utilizar también la primera compilación antes de publicar el repositorio.
 
-Los binarios se descargan de las direcciones publicadas por WinGet, normalmente del fabricante. **No se redistribuyen instaladores de terceros dentro de este repositorio.** Cada archivo se verifica mediante SHA-256 antes de ejecutarlo; una discrepancia lo bloquea. Si un fabricante cambia un archivo sin actualizar su manifiesto, se bloqueará hasta que el hash correcto se publique. La actualización depende de la disponibilidad y actualización del catálogo de WinGet; no rastrea páginas web ni documentos arbitrarios.
+Los binarios se descargan de las direcciones publicadas por WinGet, normalmente del fabricante. **No se redistribuyen instaladores de terceros dentro de este repositorio.** Cada descarga directa se verifica mediante SHA-256 antes de ejecutarla; una discrepancia la bloquea. Si un fabricante cambia un archivo sin actualizar su manifiesto, se bloqueará hasta que el hash correcto se publique. QuickSupport tiene una URL oficial mutable: la acción descarga su archivo vigente diariamente y publica su hash actualizado; el cliente verifica además la firma del fabricante. En Office se valida el paquete ODT y la firma de setup.exe; ODT gestiona los archivos de Office desde Microsoft. No se rastrean documentos arbitrarios.
 
 ## Compilación y publicación
 

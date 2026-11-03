@@ -7,11 +7,12 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
+using System.Xml;
 using ISOE;
 
 class ClientTests {
     [STAThread] static int Main(string[] args) {
-        var catalog = new JavaScriptSerializer().Deserialize<Catalog>(File.ReadAllText("catalog.json"));
+        var catalog = new JavaScriptSerializer().Deserialize<Catalog>(File.ReadAllText("catalog-v2.json"));
         foreach (var app in catalog.apps) if (app.available) MainForm.Validate(app);
         var valid = new AppEntry { id = "Test.App", architecture = "x64", sha256 = new string('A',64), type = "msi", arguments = "/qn", url = "https://example.com/app" };
         MainForm.Validate(valid);
@@ -23,6 +24,31 @@ class ClientTests {
         try { MainForm.Validate(valid); throw new Exception("Accepted HTTP"); } catch (InvalidDataException) { }
         valid.url = "https://example.com/app"; valid.sha256 = "BAD";
         try { MainForm.Validate(valid); throw new Exception("Accepted invalid hash"); } catch (InvalidDataException) { }
+        valid.sha256 = new string('A', 64); valid.architecture = "x86"; valid.allowX86 = true;
+        try { MainForm.Validate(valid); throw new Exception("Accepted arbitrary x86 exception"); } catch (InvalidDataException) { }
+        valid.id = "AnyDesk.AnyDesk"; valid.type = "exe"; valid.url = "https://download.anydesk.com/AnyDesk.exe";
+        MainForm.Validate(valid); valid.allowX86 = false;
+        try { MainForm.Validate(valid); throw new Exception("Accepted unapproved AnyDesk x86"); } catch (InvalidDataException) { }
+        foreach (string product in new[] { "O365BusinessRetail", "O365ProPlusRetail" }) {
+            var xml = new XmlDocument(); xml.LoadXml(MainForm.BuildOfficeConfiguration(@"C:\Temp\ISOE\A & B", product));
+            if (xml.SelectSingleNode("/Configuration/Add/@OfficeClientEdition").Value != "64" || xml.SelectSingleNode("/Configuration/Display/@Level").Value != "None") throw new Exception("Office must install x64 silently");
+            if (xml.SelectSingleNode("/Configuration/Remove") != null || xml.SelectSingleNode("/Configuration/RemoveMSI") != null || xml.SelectSingleNode("/Configuration/Add/@MigrateArch") != null) throw new Exception("Office config must not remove existing installations");
+            if (xml.SelectSingleNode("/Configuration/Add/@SourcePath").Value != @"C:\Temp\ISOE\A & B") throw new Exception("Office path not escaped");
+        }
+        try { MainForm.BuildOfficeConfiguration("C:\\Temp", "Injected<Product>"); throw new Exception("Office product injection accepted"); } catch (InvalidDataException) { }
+        string portableFolder = Path.GetFullPath(Path.Combine("dist", "portable-test-" + Guid.NewGuid().ToString("N")));
+        Directory.CreateDirectory(portableFolder);
+        string portableSource = Path.Combine(portableFolder, "fixture.txt"); File.WriteAllText(portableSource, "Non executable test fixture");
+        string portableTarget = Path.Combine(portableFolder, "tools", "QuickSupport.exe");
+        string portableLink = Path.Combine(portableFolder, "QuickSupport.lnk");
+        MainForm.DeployPortable(portableSource, portableTarget, portableLink);
+        if (!File.Exists(portableLink) || File.ReadAllText(portableTarget) != "Non executable test fixture") throw new Exception("Portable deployment failed");
+        if (args.Contains("--vendor-test")) {
+            InstallerSecurity.VerifyVendor(Path.GetFullPath(".venv/AnyDesk.exe"), "AnyDesk.AnyDesk");
+            InstallerSecurity.VerifyVendor(Path.GetFullPath(".venv/TeamViewerQS_x64.exe"), "TeamViewer.TeamViewer.QuickSupport");
+            InstallerSecurity.VerifyVendor(Path.GetFullPath(".venv/odt.exe"), "Microsoft.Office");
+            Console.WriteLine("Vendor signatures verified without running any installers.");
+        }
         Application.EnableVisualStyles();
         using (var form = new MainForm(true)) {
             var flags = BindingFlags.Instance | BindingFlags.NonPublic;
