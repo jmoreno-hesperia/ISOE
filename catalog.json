@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-11-03T12:32:19.663644+00:00",
+  "updatedAt": "2026-11-03T14:04:03.290209+00:00",
   "apps": [
     {
       "id": "Adobe.Acrobat.Reader.64-bit",
       "name": "Adobe Acrobat Reader",
       "publisher": "Adobe",
       "available": true,
-      "version": "26.002.22031",
+      "version": "26.003.22075",
       "architecture": "x64",
-      "url": "https://ardownload3.adobe.com/pub/adobe/acrobat/win/AcrobatDC/2600222031/AcroRdrDCx642600222031_MUI.exe",
-      "sha256": "6FF26E9D58DF0E6AF633CED481A1EFFF97F17A30D2B1554D054C398E824E7C77",
+      "url": "https://ardownload2.adobe.com/pub/adobe/acrobat/win/AcrobatDC/2600322075/AcroRdrDCx642600322075_MUI.exe",
+      "sha256": "7BEC66953457F6BC78BCE9F0A1DCDDE1C4CF2A8F8AC26F73FCECF5738F42F307",
       "type": "exe",
       "arguments": "-sfx_nu /sAll /rs /msi",
       "successCodes": [
