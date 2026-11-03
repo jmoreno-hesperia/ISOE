@@ -20,8 +20,8 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("ISOE")]
 [assembly: AssemblyProduct("Install Software on Enterprises")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 
 namespace ISOE {
     public sealed class AppEntry {
@@ -57,6 +57,8 @@ namespace ISOE {
         }
     }
     public sealed class MainForm : Form {
+        [DllImport("user32.dll")]
+        static extern bool ShowScrollBar(IntPtr window, int bar, bool show);
         const string Repository = "https://github.com/jmoreno-hesperia/ISOE";
         const string CatalogUrl = "https://raw.githubusercontent.com/jmoreno-hesperia/ISOE/main/catalog-v2.json";
         readonly ListView list = new ListView();
@@ -74,61 +76,86 @@ namespace ISOE {
         volatile bool busy, stop;
         bool rendering;
         string runFolder;
+        string logFile;
         string catalogDate;
         bool reboot;
 
         public MainForm() : this(false) { }
         public MainForm(bool preview) {
-            Text = "ISOE v1.1.0 · Install Software on Enterprises";
-            Size = new Size(960, 760); MinimumSize = new Size(780, 650);
+            Text = "ISOE - Software para tu empresa";
+            AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
+            ClientSize = new Size(700, 520); MinimumSize = new Size(560, 450);
             StartPosition = FormStartPosition.CenterScreen;
-            Font = new Font("Segoe UI", 10); BackColor = Color.FromArgb(245, 247, 251);
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24), ColumnCount = 1, RowCount = 9 };
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 62));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+            Font = new Font("Segoe UI", 9); BackColor = Color.FromArgb(246, 248, 248);
+            using (var iconStream = Assembly.GetExecutingAssembly().GetManifestResourceStream("ISOE.icon"))
+                if (iconStream != null) using (var embeddedIcon = new Icon(iconStream)) Icon = (Icon)embeddedIcon.Clone();
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(14), ColumnCount = 1, RowCount = 9 };
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 80));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 38));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 72));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 10));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 10));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 28));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-            var header = new Label { Text = "ISOE\nSoftware para tu empresa · x64 y excepciones autorizadas", Dock = DockStyle.Fill, Font = new Font("Segoe UI", 16, FontStyle.Bold), ForeColor = Color.FromArgb(22, 47, 78) };
+            var header = new BrandHeader { Dock = DockStyle.Fill, Margin = Padding.Empty };
             search.Dock = DockStyle.Fill;
             search.TextChanged += delegate { RenderApps(); };
-            list.Dock = DockStyle.Fill; list.View = View.Details; list.CheckBoxes = true; list.FullRowSelect = true;
-            list.Columns.Add("Programa", 240); list.Columns.Add("Versión", 130); list.Columns.Add("Disponibilidad / resultado", 450);
+            list.Dock = DockStyle.Fill; list.View = View.Details; list.CheckBoxes = true; list.FullRowSelect = true; list.ShowItemToolTips = true;
+            list.Columns.Add("Programa", 220); list.Columns.Add("Versión", 120); list.Columns.Add("Estado", 300);
+            list.SizeChanged += delegate { FitColumns(); if (IsHandleCreated) BeginInvoke((Action)FitColumns); };
             list.ItemCheck += delegate(object sender, ItemCheckEventArgs e) {
                 if (rendering) return;
                 var app = (AppEntry)list.Items[e.Index].Tag;
                 if (!app.available || busy) { e.NewValue = e.CurrentValue; return; }
                 if (e.NewValue == CheckState.Checked) selected.Add(app.id); else selected.Remove(app.id);
             };
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill };
+            var buttons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = Padding.Empty };
+            buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 50)); buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
             install.Text = "Instalar / preparar"; install.AutoSize = true; install.Enabled = false; install.Click += delegate { StartQueue(); };
             refresh.Text = "Actualizar catálogo"; refresh.AutoSize = true; refresh.Click += delegate { LoadCatalog(); };
             cancel.Text = "Detener cola"; cancel.AutoSize = true; cancel.Enabled = false; cancel.Click += delegate { stop = true; cancel.Enabled = false; WriteLog("Se cancelan las descargas directas. Si Office u otro instalador está activo, se espera al fin de su fase."); };
             var add = new Button { Text = "Añadir software", AutoSize = true };
             add.Click += delegate { Process.Start(new ProcessStartInfo(Repository + "/issues/new?template=add-app.yml") { UseShellExecute = true }); };
-            buttons.Controls.AddRange(new Control[] { install, refresh, cancel, add });
-            status.Dock = DockStyle.Fill; status.Text = "Cargando catálogo…";
+            foreach (var button in new[] { install, refresh, cancel, add }) { button.Dock = DockStyle.Fill; button.AutoSize = false; button.Margin = new Padding(3); }
+            buttons.Controls.Add(install, 0, 0); buttons.Controls.Add(refresh, 1, 0); buttons.Controls.Add(cancel, 0, 1); buttons.Controls.Add(add, 1, 1);
+            status.Dock = DockStyle.Fill; status.AutoEllipsis = true; status.TextAlign = ContentAlignment.MiddleLeft; status.Text = "Cargando catálogo…";
             current.Dock = DockStyle.Fill; total.Dock = DockStyle.Fill;
             log.Dock = DockStyle.Fill; log.Multiline = true; log.ReadOnly = true; log.ScrollBars = ScrollBars.Vertical;
             log.BackColor = Color.White; log.Font = new Font("Consolas", 9);
-            count.Dock = DockStyle.Fill; count.Text = "Buscar por nombre o ID de WinGet en el campo superior.";
+            count.Dock = DockStyle.Fill; count.AutoEllipsis = true; count.TextAlign = ContentAlignment.MiddleLeft; count.ForeColor = Color.FromArgb(85, 105, 110);
+            count.Text = "Las descargas se borran al terminar. Se conservan los registros.";
             layout.Controls.Add(header); layout.Controls.Add(search); layout.Controls.Add(list); layout.Controls.Add(buttons);
             layout.Controls.Add(status); layout.Controls.Add(current); layout.Controls.Add(total); layout.Controls.Add(log); layout.Controls.Add(count);
             Controls.Add(layout);
-            if (!preview) Shown += delegate { LoadCatalog(); };
+            Shown += delegate { FitToWorkingArea(); FitColumns(); if (!preview) LoadCatalog(); };
             FormClosing += delegate(object sender, FormClosingEventArgs e) {
                 if (busy) { e.Cancel = true; stop = true; WriteLog("Espera al fin de la operación activa antes de cerrar."); }
             };
         }
+        void FitColumns() {
+            if (list.Columns.Count != 3 || list.ClientSize.Width < 100) return;
+            int width = Math.Max(100, list.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 4);
+            list.Columns[0].Width = (int)(width * 0.39);
+            list.Columns[1].Width = (int)(width * 0.20);
+            list.Columns[2].Width = -2;
+            if (list.IsHandleCreated && list.Columns.Cast<ColumnHeader>().Sum(column => column.Width) <= list.ClientSize.Width)
+                ShowScrollBar(list.Handle, 0, false);
+        }
+        public void FitToWorkingArea() {
+            Rectangle area = Screen.FromControl(this).WorkingArea;
+            int width = Math.Max(320, (int)(area.Width * 0.88)), height = Math.Max(300, area.Height - 36);
+            MinimumSize = new Size(Math.Min(560, width), Math.Min(450, height));
+            Size = new Size(Math.Min(Width, width), Math.Min(Height, height));
+            Location = new Point(area.Left + (area.Width - Width) / 2, area.Top + (area.Height - Height) / 2);
+        }
         void UI(Action action) { if (!IsDisposed) Invoke(action); }
         void WriteLog(string message) {
             string line = DateTime.Now.ToString("HH:mm:ss") + "  " + message + Environment.NewLine;
-            if (runFolder != null) {
-                try { File.AppendAllText(Path.Combine(runFolder, "ISOE.log"), line, Encoding.UTF8); }
+            if (logFile != null) {
+                try { File.AppendAllText(logFile, line, Encoding.UTF8); }
                 catch (IOException) { line += "No se pudo escribir el registro en disco." + Environment.NewLine; }
                 catch (UnauthorizedAccessException) { line += "Sin permiso para escribir el registro en disco." + Environment.NewLine; }
             }
@@ -144,6 +171,7 @@ namespace ISOE {
                 var item = new ListViewItem(app.name) { Tag = app };
                 item.SubItems.Add(app.version ?? "—");
                 item.SubItems.Add(app.available ? (app.type == "portable" ? "Preparar portable · x64" : app.type == "office-odt" ? "Office x64 · Business / Enterprise" : app.architecture == "x86" ? "Listo · x86 (excepción autorizada)" : "Listo · x64") : app.reason ?? "No disponible");
+                item.ToolTipText = app.name + " · " + (app.version ?? "") + "\n" + item.SubItems[2].Text;
                 if (!app.available) item.ForeColor = Color.Gray;
                 list.Items.Add(item); item.Checked = selected.Contains(app.id) && app.available;
             }
@@ -214,7 +242,8 @@ namespace ISOE {
             new Thread(delegate() {
                 int ok = 0, failed = 0, completed = 0;
                 try {
-                    runFolder = Path.Combine(@"C:\Temp\ISOE", Guid.NewGuid().ToString("N"));
+                    string runId = Guid.NewGuid().ToString("N");
+                    runFolder = Path.Combine(@"C:\Temp\ISOE", runId); logFile = null;
                     var security = new DirectorySecurity(); security.SetAccessRuleProtection(true, false);
                     foreach (var sid in new[] { new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null) })
                         security.AddAccessRule(new FileSystemAccessRule(sid, FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
@@ -225,7 +254,11 @@ namespace ISOE {
                     Directory.CreateDirectory(@"C:\Temp\ISOE", security);
                     Directory.SetAccessControl(@"C:\Temp\ISOE", security);
                     Directory.CreateDirectory(runFolder, security);
-                    WriteLog("Registro: " + runFolder + "\\ISOE.log");
+                    string logFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "ISOE", "Logs");
+                    EnsureNoReparseAncestors(logFolder);
+                    Directory.CreateDirectory(logFolder, security);
+                    logFile = Path.Combine(logFolder, runId + ".log");
+                    WriteLog("Registro: " + logFile);
                     foreach (var app in queue) {
                         if (stop) break;
                         try {
@@ -273,9 +306,66 @@ namespace ISOE {
                     }
                     WriteLog("Instalados: " + ok + ". Errores: " + failed + ". Sin procesar: " + (queue.Length - completed) + (reboot ? ". Reinicio pendiente." : "."));
                     UI(delegate { status.Text = (stop ? "Cola detenida. " : "Cola finalizada. ") + ok + " instalados, " + failed + " errores." + (reboot ? " Reinicia Windows cuando puedas." : ""); });
-                } catch (Exception ex) { WriteLog("No se pudo continuar: " + ex.Message); UI(delegate { status.Text = "Error al preparar la cola. Revisa el registro."; });
-                } finally { UI(delegate { current.Style = ProgressBarStyle.Continuous; SetBusy(false); cancel.Enabled = false; }); }
+                } catch (Exception ex) { failed++; WriteLog("No se pudo continuar: " + ex.Message); UI(delegate { status.Text = "Error al preparar la cola. Revisa el registro."; });
+                } finally {
+                    try {
+                        if (runFolder != null && Directory.Exists(runFolder)) {
+                            UI(delegate { status.Text = "Limpiando descargas temporales…"; });
+                            Exception last = null;
+                            for (int attempt = 0; attempt < 3; attempt++) {
+                                try { CleanRunDirectory(@"C:\Temp\ISOE", runFolder); last = null; break; }
+                                catch (IOException error) { last = error; if (attempt < 2) Thread.Sleep(700); }
+                            }
+                            if (last != null) throw last;
+                            WriteLog("Descargas temporales eliminadas. Registro conservado: " + (logFile ?? "no disponible"));
+                            UI(delegate { status.Text = (stop ? "Cola detenida. " : "Cola finalizada. ") + ok + " correctos, " + failed + " errores. Temporales eliminados." + (reboot ? " Reinicio pendiente." : ""); });
+                        }
+                    } catch (Exception cleanupError) {
+                        WriteLog("No se pudo completar la limpieza de " + runFolder + ": " + cleanupError.Message);
+                        UI(delegate { status.Text = "Proceso finalizado; quedaron temporales pendientes. Revisa el registro."; });
+                    }
+                    UI(delegate { current.Style = ProgressBarStyle.Continuous; SetBusy(false); cancel.Enabled = false; });
+                }
             }) { IsBackground = true }.Start();
+        }
+        static void EnsureNoReparseAncestors(string path) {
+            for (var directory = new DirectoryInfo(Path.GetFullPath(path)); directory != null; directory = directory.Parent)
+                if (directory.Exists && (directory.Attributes & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException("No se permiten enlaces en la ruta: " + directory.FullName);
+        }
+        public static void CleanRunDirectory(string tempRoot, string folder) {
+            string root = Path.GetFullPath(tempRoot).TrimEnd(Path.DirectorySeparatorChar);
+            string target = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar);
+            Guid id;
+            if (root == Path.GetPathRoot(root).TrimEnd(Path.DirectorySeparatorChar) ||
+                !String.Equals(Path.GetDirectoryName(target), root, StringComparison.OrdinalIgnoreCase) ||
+                !Guid.TryParseExact(Path.GetFileName(target), "N", out id))
+                throw new IOException("La limpieza solo admite una carpeta de ejecución propia.");
+            EnsureNoReparseAncestors(target);
+            if (!Directory.Exists(target)) return;
+            // Validate the entire tree before deleting anything; never follow junctions.
+            CheckOwnedTree(target);
+            DeleteOwnedTree(target);
+            try { if (!Directory.EnumerateFileSystemEntries(root).Any()) Directory.Delete(root, false); }
+            catch (IOException) { } // Another run may still be using the shared root.
+            catch (UnauthorizedAccessException) { }
+        }
+        static void CheckOwnedTree(string directory) {
+            foreach (string entry in Directory.EnumerateFileSystemEntries(directory)) {
+                FileAttributes attributes = File.GetAttributes(entry);
+                if ((attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("Limpieza bloqueada por un enlace: " + entry);
+                if ((attributes & FileAttributes.Directory) != 0) CheckOwnedTree(entry);
+            }
+        }
+        static void DeleteOwnedTree(string directory) {
+            EnsureNoReparseAncestors(directory);
+            foreach (string entry in Directory.EnumerateFileSystemEntries(directory)) {
+                FileAttributes attributes = File.GetAttributes(entry);
+                if ((attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("Limpieza bloqueada por un enlace: " + entry);
+                if ((attributes & FileAttributes.Directory) != 0) DeleteOwnedTree(entry);
+                else { File.SetAttributes(entry, attributes & ~FileAttributes.ReadOnly); File.Delete(entry); }
+            }
+            Directory.Delete(directory, false);
         }
         public static string BuildOfficeConfiguration(string sourceFolder, string product) {
             if (product != "O365BusinessRetail" && product != "O365ProPlusRetail") throw new InvalidDataException("Edición de Office no permitida.");

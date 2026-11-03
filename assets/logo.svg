@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="100" viewBox="0 0 760 100" role="img" aria-label="Hesperia World · ISOE - Software para tu empresa">
+  <g transform="translate(5 15) scale(1.0546875)">
+    <rect width="64" height="64" rx="12" fill="#12343c"/>
+    <path d="M17 16h8v32h-8zM39 16h8v32h-8z" fill="white"/>
+    <path d="M25 28h14v8H25zM43 8h4v4h-4zM51 8h4v4h-4z" fill="#c39d5b"/>
+  </g>
+  <text x="92" y="36" font-family="Segoe UI,Arial,sans-serif" font-size="17.5" fill="#c39d5b">Hesperia World</text>
+  <text x="90" y="70" font-family="Segoe UI,Arial,sans-serif" font-size="26" font-weight="700" fill="#12343c">ISOE - Software para tu empresa</text>
+</svg>

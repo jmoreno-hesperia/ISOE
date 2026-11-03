@@ -9,7 +9,11 @@ Cliente nativo y ligero para instalar software de **64 bits** en Windows, en col
 3. Busca programas en el catálogo, marca los que quieras e inicia la instalación. Confirma la aceptación de sus licencias.
 4. ISOE descarga e instala cada programa antes de pasar al siguiente. Muestra progreso de descarga, instalación activa y avance de la cola.
 
-Las descargas y registros se conservan en `C:\Temp\ISOE\<identificador de ejecución>`. La carpeta ISOE se restringe a administradores y SYSTEM. El botón **Detener cola** cancela una descarga o espera a que termine el instalador activo; no interrumpe instalaciones a medias. Si un programa falla, queda registrado y continúa el siguiente.
+Las descargas se guardan temporalmente en `C:\Temp\ISOE\<identificador de ejecución>` y se borran automáticamente al terminar, cancelar o fallar la cola, después de que finalice el proceso activo. Los registros se conservan aparte en `C:\ProgramData\ISOE\Logs\<identificador>.log`. Las carpetas se restringen a administradores y SYSTEM. El botón **Detener cola** cancela una descarga o espera a que termine el instalador activo; no interrumpe instalaciones a medias. Si un programa falla, queda registrado y continúa el siguiente.
+
+La limpieza solo admite la carpeta propia de esa ejecución: no elimina `C:\Temp`, registros, archivos de otras ejecuciones ni herramientas instaladas como QuickSupport. Rechaza enlaces simbólicos y junctions antes de borrar. Si Windows mantiene un archivo bloqueado, reintenta y muestra en pantalla y en el registro que quedan temporales pendientes.
+
+Desde **v1.2.0**, la ventana es compacta (700 × 520 de área cliente), limita su tamaño al área útil de la pantalla, distribuye los botones en dos filas y adapta las columnas al ancho disponible. Incluye logo vectorial e icono, con la cabecera **Hesperia World** y **ISOE - Software para tu empresa**. El logo fuente está en `assets/logo.svg`; los recursos nativos y el icono se generan al compilar, sin dependencias adicionales.
 
 La descarga tiene porcentaje real cuando el servidor comunica su tamaño. Durante la instalación se muestra actividad, porque los instaladores no ofrecen una API común para conocer un porcentaje real. Los reinicios requeridos se indican al finalizar; los parámetros silenciosos proceden del manifiesto del fabricante en WinGet.
 

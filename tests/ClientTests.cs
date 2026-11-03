@@ -11,7 +11,55 @@ using System.Xml;
 using ISOE;
 
 class ClientTests {
+    static void CheckLayout(Form form, ListView list) {
+        Application.DoEvents();
+        Rectangle client = form.RectangleToScreen(form.ClientRectangle);
+        var buttons = Descendants(form).OfType<Button>().ToArray();
+        if (buttons.Length != 4) throw new Exception("Missing queue buttons");
+        foreach (var button in buttons) {
+            Rectangle bounds = button.RectangleToScreen(button.ClientRectangle);
+            if (!client.Contains(bounds) || button.Height < 20 || button.Width < 100) throw new Exception("Button clipped: " + button.Text);
+        }
+        if (list.Columns.Cast<ColumnHeader>().Sum(c => c.Width) > list.ClientSize.Width) throw new Exception("Horizontal catalog overflow");
+        if (form.Width > Screen.FromControl(form).WorkingArea.Width || form.Height > Screen.FromControl(form).WorkingArea.Height) throw new Exception("Window larger than screen");
+    }
+    static System.Collections.Generic.IEnumerable<Control> Descendants(Control parent) {
+        foreach (Control child in parent.Controls) { yield return child; foreach (var nested in Descendants(child)) yield return nested; }
+    }
+    static void Snapshot(Form form, string path) {
+        Application.DoEvents();
+        using (var bitmap = new Bitmap(form.Width, form.Height)) { form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size)); bitmap.Save(path); }
+    }
+    static void CleanupTests() {
+        string workspace = Path.GetFullPath(Path.Combine("dist", "cleanup-test-" + Guid.NewGuid().ToString("N")));
+        string root = Path.Combine(workspace, "downloads"), folder = Path.Combine(root, Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(folder, "Office365", "Office", "Data"));
+        string preservedLog = Path.Combine(workspace, "ISOE.log"), installed = Path.Combine(workspace, "installed-tool.exe");
+        File.WriteAllText(preservedLog, "Log to retain"); File.WriteAllText(installed, "Installed tool to retain");
+        File.WriteAllText(Path.Combine(folder, "app.exe"), "Download");
+        File.WriteAllText(Path.Combine(folder, "Office365", "Office", "Data", "payload.cab"), "Office data");
+        string sibling = Path.Combine(root, Guid.NewGuid().ToString("N")); Directory.CreateDirectory(sibling); File.WriteAllText(Path.Combine(sibling, "keep.txt"), "Other run");
+        foreach (var invalid in new[] { root, workspace, Path.Combine(root, "not-a-run"), Path.Combine(workspace, Guid.NewGuid().ToString("N")) }) {
+            try { MainForm.CleanRunDirectory(root, invalid); throw new Exception("Unsafe cleanup target accepted"); } catch (IOException) { }
+        }
+        MainForm.CleanRunDirectory(root, folder);
+        if (Directory.Exists(folder) || !File.Exists(preservedLog) || !File.Exists(installed) || !File.Exists(Path.Combine(sibling, "keep.txt"))) throw new Exception("Cleanup did not preserve logs/other runs/installed tools");
+        string locked = Path.Combine(sibling, "locked.exe"); File.WriteAllText(locked, "Busy download");
+        using (var handle = new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.None)) {
+            try { MainForm.CleanRunDirectory(root, sibling); throw new Exception("Locked download should be reported"); } catch (IOException) { }
+            if (!File.Exists(preservedLog)) throw new Exception("Log lost after cleanup failure");
+        }
+        MainForm.CleanRunDirectory(root, sibling);
+        if (Directory.Exists(root) || !File.Exists(preservedLog) || !File.Exists(installed)) throw new Exception("Final cleanup failed");
+        string junctionRoot = Path.GetFullPath("dist/cleanup-junction-fixture/downloads");
+        string junctionRun = Path.Combine(junctionRoot, "0123456789abcdef0123456789abcdef");
+        if (Directory.Exists(junctionRun)) {
+            try { MainForm.CleanRunDirectory(junctionRoot, junctionRun); throw new Exception("Junction cleanup accepted"); } catch (IOException) { }
+            if (!File.Exists("dist/cleanup-junction-fixture/outside/keep.txt")) throw new Exception("Junction target changed");
+        }
+    }
     [STAThread] static int Main(string[] args) {
+        CleanupTests();
         var catalog = new JavaScriptSerializer().Deserialize<Catalog>(File.ReadAllText("catalog-v2.json"));
         foreach (var app in catalog.apps) if (app.available) MainForm.Validate(app);
         var valid = new AppEntry { id = "Test.App", architecture = "x64", sha256 = new string('A',64), type = "msi", arguments = "/qn", url = "https://example.com/app" };
@@ -58,8 +106,11 @@ class ClientTests {
             var status = (Label)typeof(MainForm).GetField("status", flags).GetValue(form);
             status.Text = "Catálogo actualizado · " + catalog.apps.Length + " programas";
             form.Show(); Application.DoEvents();
-            using (var bitmap = new Bitmap(form.Width, form.Height)) { form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size)); bitmap.Save("dist/preview.png"); }
             var list = (ListView)typeof(MainForm).GetField("list", flags).GetValue(form);
+            if (form.Text != "ISOE - Software para tu empresa" || !Descendants(form).OfType<BrandHeader>().Any()) throw new Exception("Branding missing");
+            CheckLayout(form, list); Snapshot(form, "dist/preview.png");
+            form.Size = new Size(560, 450); CheckLayout(form, list); Snapshot(form, "dist/preview-small.png");
+            form.Scale(new SizeF(1.5f, 1.5f)); form.FitToWorkingArea(); CheckLayout(form, list); Snapshot(form, "dist/preview-150.png");
             if (list.Items.Count != catalog.apps.Length) throw new Exception("Catalog UI missing rows");
             var available = list.Items.Cast<ListViewItem>().First(i => ((AppEntry)i.Tag).available);
             string selectedId = ((AppEntry)available.Tag).id;
