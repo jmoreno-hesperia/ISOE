@@ -5,6 +5,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Principal;
@@ -64,6 +65,7 @@ namespace ISOE {
         volatile bool busy, stop;
         bool rendering;
         string runFolder;
+        string catalogDate;
         bool reboot;
 
         public MainForm() : this(false) { }
@@ -147,10 +149,24 @@ namespace ISOE {
                     var catalog = new JavaScriptSerializer { MaxJsonLength = 4 * 1024 * 1024 }.Deserialize<Catalog>(json);
                     if (catalog == null || catalog.schemaVersion != 1 || catalog.apps == null) throw new InvalidDataException("Formato de catálogo no compatible.");
                     foreach (var app in catalog.apps) if (app.available) Validate(app);
-                    UI(delegate { apps = catalog.apps; selected.RemoveWhere(id => !apps.Any(a => a.id == id && a.available)); RenderApps(); status.Text = "Catálogo actualizado: " + catalog.updatedAt; });
+                    UI(delegate { apps = catalog.apps; catalogDate = catalog.updatedAt; selected.RemoveWhere(id => !apps.Any(a => a.id == id && a.available)); RenderApps(); status.Text = "Catálogo actualizado: " + catalogDate; });
                 } catch (Exception ex) {
-                    UI(delegate { apps = new AppEntry[0]; selected.Clear(); RenderApps(); status.Text = "No se pudo cargar el catálogo. Pulsa Actualizar para reintentar."; });
-                    WriteLog(ex.Message);
+                    WriteLog("No se pudo consultar GitHub: " + ex.Message);
+                    try {
+                        if (apps.Length == 0) {
+                            using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("ISOE.catalog.json"))
+                            using (var reader = new StreamReader(stream, Encoding.UTF8)) {
+                                var embedded = new JavaScriptSerializer().Deserialize<Catalog>(reader.ReadToEnd());
+                                foreach (var app in embedded.apps) if (app.available) Validate(app);
+                                UI(delegate { apps = embedded.apps; catalogDate = embedded.updatedAt; RenderApps(); });
+                            }
+                            WriteLog("Se utiliza el catálogo integrado: " + catalogDate + ". Los enlaces pueden haber cambiado; se verificará el SHA-256.");
+                        }
+                        UI(delegate { status.Text = "Sin actualización de GitHub. Catálogo conservado: " + catalogDate; });
+                    } catch (Exception fallback) {
+                        WriteLog(fallback.Message);
+                        UI(delegate { status.Text = "No hay catálogo disponible. Pulsa Actualizar para reintentar."; });
+                    }
                 } finally { UI(delegate { SetBusy(false); cancel.Enabled = false; }); }
             }) { IsBackground = true }.Start();
         }

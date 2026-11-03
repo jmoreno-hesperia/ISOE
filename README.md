@@ -41,6 +41,8 @@ No se insertan respuestas de issues en comandos de shell ni se almacenan tokens 
 
 El cliente lee `catalog.json` desde este repositorio al abrirse o al pulsar **Actualizar catálogo**. Así recibe enlaces nuevos sin recompilar. Si el repositorio es privado, este cliente no podrá descargar el catálogo sin una solución adicional de autenticación; nunca incrustes un token personal en el ejecutable.
 
+Si GitHub no responde, el cliente conserva el catálogo ya cargado o utiliza el incluido dentro del ejecutable. Muestra su fecha y avisa de que no ha podido actualizarlo. Las descargas siguen requiriendo Internet y un SHA-256 coincidente. Esto permite utilizar también la primera compilación antes de publicar el repositorio.
+
 Los binarios se descargan de las direcciones publicadas por WinGet, normalmente del fabricante. **No se redistribuyen instaladores de terceros dentro de este repositorio.** Cada archivo se verifica mediante SHA-256 antes de ejecutarlo; una discrepancia lo bloquea. Si un fabricante cambia un archivo sin actualizar su manifiesto, se bloqueará hasta que el hash correcto se publique. La actualización depende de la disponibilidad y actualización del catálogo de WinGet; no rastrea páginas web ni documentos arbitrarios.
 
 ## Compilación y publicación
@@ -73,5 +75,7 @@ python scripts/catalog.py
 ```
 
 Las pruebas cubren rechazo de x86/ARM/neutral, HTTP, hashes inválidos, dependencias y parámetros desconocidos; herencia de argumentos; orden de versiones y lectura segura de formularios. `ISOE.exe --self-test` valida las restricciones del cliente sin instalar programas. `tests/ClientTests.cs` permite además renderizar la interfaz con un catálogo de prueba sin descargar ni instalar software.
+
+El ejecutable de pruebas `ClientTests.exe --download-test` realiza opcionalmente una descarga real de 7-Zip mediante el código del cliente, verifica su hash y no ejecuta el instalador.
 
 Las pruebas automatizadas no sustituyen una prueba de instalación en una máquina virtual Windows limpia para cada programa y versión aprobada.
