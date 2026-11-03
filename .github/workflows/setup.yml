@@ -1,0 +1,28 @@
+name: Preparar formularios de ISOE
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/setup.yml']
+permissions:
+  contents: read
+  issues: write
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Crear etiqueta para aprobar software
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.getLabel({...context.repo, name: 'new-app'});
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              await github.rest.issues.createLabel({
+                ...context.repo,
+                name: 'new-app',
+                color: '1D76DB',
+                description: 'Software revisado por un mantenedor para añadir a ISOE'
+              });
+            }

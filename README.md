@@ -29,7 +29,7 @@ La descarga tiene porcentaje real cuando el servidor comunica su tamaño. Durant
 Abre [Añadir software](https://github.com/jmoreno-hesperia/ISOE/issues/new?template=add-app.yml), o pulsa ese botón en ISOE. Indica **ID de WinGet**, **Nombre** y, opcionalmente, **Fabricante**. Puedes encontrar el ID con `winget search <nombre>` en un equipo que tenga WinGet.
 
 - Las solicitudes abiertas por el propietario o colaboradores con permiso de escritura se tramitan automáticamente.
-- Las solicitudes de otras personas requieren que un mantenedor aplique la etiqueta **new-app**. Si la etiqueta no existe, créala en Issues → Labels. Esto impide que terceros añadan software directamente a los equipos de la empresa.
+- Las solicitudes de otras personas requieren que un mantenedor aplique la etiqueta **new-app**. La acción **Preparar formularios de ISOE** crea esta etiqueta automáticamente. Esto impide que terceros añadan software directamente a los equipos de la empresa.
 - La acción valida ID, duplicados, existencia del paquete, arquitectura, SHA-256 y parámetros silenciosos. Actualiza `apps.json` y `catalog.json`, hace commit y cierra el issue si todo es correcto.
 - Si falla, el issue queda abierto con un enlace al registro de Actions. Corrige la solicitud y vuelve a aplicar `new-app` para reintentarlo.
 
