@@ -20,8 +20,8 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("ISOE")]
 [assembly: AssemblyProduct("Install Software on Enterprises")]
-[assembly: AssemblyVersion("1.2.1.0")]
-[assembly: AssemblyFileVersion("1.2.1.0")]
+[assembly: AssemblyVersion("1.2.2.0")]
+[assembly: AssemblyFileVersion("1.2.2.0")]
 
 namespace ISOE {
     public sealed class AppEntry {
@@ -86,7 +86,7 @@ namespace ISOE {
             AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
             ClientSize = new Size(700, 520); MinimumSize = new Size(560, 450);
             StartPosition = FormStartPosition.CenterScreen;
-            Font = new Font("Segoe UI", 9); BackColor = Color.FromArgb(246, 248, 248);
+            Font = new Font("Segoe UI", 9); BackColor = Color.FromArgb(244, 247, 250);
             using (var iconStream = Assembly.GetExecutingAssembly().GetManifestResourceStream("ISOE.icon"))
                 if (iconStream != null) using (var embeddedIcon = new Icon(iconStream)) Icon = (Icon)embeddedIcon.Clone();
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(14), ColumnCount = 1, RowCount = 9 };
@@ -120,12 +120,14 @@ namespace ISOE {
             var add = new Button { Text = "Añadir software", AutoSize = true };
             add.Click += delegate { Process.Start(new ProcessStartInfo(Repository + "/issues/new?template=add-app.yml") { UseShellExecute = true }); };
             foreach (var button in new[] { install, refresh, cancel, add }) { button.Dock = DockStyle.Fill; button.AutoSize = false; button.Margin = new Padding(3); }
+            install.UseVisualStyleBackColor = false; install.BackColor = Brand.Blue; install.ForeColor = Color.White;
+            install.FlatStyle = FlatStyle.Flat; install.FlatAppearance.BorderSize = 0;
             buttons.Controls.Add(install, 0, 0); buttons.Controls.Add(refresh, 1, 0); buttons.Controls.Add(cancel, 0, 1); buttons.Controls.Add(add, 1, 1);
             status.Dock = DockStyle.Fill; status.AutoEllipsis = true; status.TextAlign = ContentAlignment.MiddleLeft; status.Text = "Cargando catálogo…";
             current.Dock = DockStyle.Fill; total.Dock = DockStyle.Fill;
             log.Dock = DockStyle.Fill; log.Multiline = true; log.ReadOnly = true; log.ScrollBars = ScrollBars.Vertical;
             log.BackColor = Color.White; log.Font = new Font("Consolas", 9);
-            count.Dock = DockStyle.Fill; count.AutoEllipsis = true; count.TextAlign = ContentAlignment.MiddleLeft; count.ForeColor = Color.FromArgb(85, 105, 110);
+            count.Dock = DockStyle.Fill; count.AutoEllipsis = true; count.TextAlign = ContentAlignment.MiddleLeft; count.ForeColor = Color.FromArgb(85, 105, 125);
             count.Text = "Las descargas se borran al terminar. Se conservan los registros.";
             layout.Controls.Add(header); layout.Controls.Add(search); layout.Controls.Add(list); layout.Controls.Add(buttons);
             layout.Controls.Add(status); layout.Controls.Add(current); layout.Controls.Add(total); layout.Controls.Add(log); layout.Controls.Add(count);

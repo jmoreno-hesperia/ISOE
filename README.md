@@ -15,7 +15,7 @@ La limpieza solo admite la carpeta propia de esa ejecución: no elimina `C:\Temp
 
 Desde **v1.2.1**, ISOE se cierra automáticamente al finalizar la cola, después de esperar a los procesos activos, guardar el resultado e intentar la limpieza. También se cierra si la cola se detiene o termina con errores. Si algún archivo sigue bloqueado, la incidencia y la ruta pendiente quedan en el registro conservado en `C:\ProgramData\ISOE\Logs`.
 
-Desde **v1.2.0**, la ventana es compacta (700 × 520 de área cliente), limita su tamaño al área útil de la pantalla, distribuye los botones en dos filas y adapta las columnas al ancho disponible. Incluye logo vectorial e icono, con la cabecera **Hesperia World** y **ISOE - Software para tu empresa**. El logo fuente está en `assets/logo.svg`; los recursos nativos y el icono se generan al compilar, sin dependencias adicionales.
+Desde **v1.2.0**, la ventana es compacta (700 × 520 de área cliente), limita su tamaño al área útil de la pantalla, distribuye los botones en dos filas y adapta las columnas al ancho disponible. Desde **v1.2.2** utiliza el logotipo y el icono originales de Hesperia World, con cabecera azul marino, acentos azules y el texto **ISOE - Software para tu empresa**. Los originales están en `assets/` y sus fuentes se documentan en `assets/SOURCES.md`. Se incrustan en el ejecutable, sin descargas adicionales al abrirlo.
 
 La descarga tiene porcentaje real cuando el servidor comunica su tamaño. Durante la instalación se muestra actividad, porque los instaladores no ofrecen una API común para conocer un porcentaje real. Los reinicios requeridos se indican al finalizar; los parámetros silenciosos proceden del manifiesto del fabricante en WinGet.
 
