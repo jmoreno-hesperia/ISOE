@@ -11,7 +11,9 @@ Cliente nativo y ligero para instalar software de **64 bits** en Windows, en col
 
 Las descargas se guardan temporalmente en `C:\Temp\ISOE\<identificador de ejecución>` y se borran automáticamente al terminar, cancelar o fallar la cola, después de que finalice el proceso activo. Los registros se conservan aparte en `C:\ProgramData\ISOE\Logs\<identificador>.log`. Las carpetas se restringen a administradores y SYSTEM. El botón **Detener cola** cancela una descarga o espera a que termine el instalador activo; no interrumpe instalaciones a medias. Si un programa falla, queda registrado y continúa el siguiente.
 
-La limpieza solo admite la carpeta propia de esa ejecución: no elimina `C:\Temp`, registros, archivos de otras ejecuciones ni herramientas instaladas como QuickSupport. Rechaza enlaces simbólicos y junctions antes de borrar. Si Windows mantiene un archivo bloqueado, reintenta y muestra en pantalla y en el registro que quedan temporales pendientes.
+La limpieza solo admite la carpeta propia de esa ejecución: no elimina `C:\Temp`, registros, archivos de otras ejecuciones ni herramientas instaladas como QuickSupport. Rechaza enlaces simbólicos y junctions antes de borrar. Si Windows mantiene un archivo bloqueado, reintenta y deja anotados en el registro los temporales pendientes.
+
+Desde **v1.2.1**, ISOE se cierra automáticamente al finalizar la cola, después de esperar a los procesos activos, guardar el resultado e intentar la limpieza. También se cierra si la cola se detiene o termina con errores. Si algún archivo sigue bloqueado, la incidencia y la ruta pendiente quedan en el registro conservado en `C:\ProgramData\ISOE\Logs`.
 
 Desde **v1.2.0**, la ventana es compacta (700 × 520 de área cliente), limita su tamaño al área útil de la pantalla, distribuye los botones en dos filas y adapta las columnas al ancho disponible. Incluye logo vectorial e icono, con la cabecera **Hesperia World** y **ISOE - Software para tu empresa**. El logo fuente está en `assets/logo.svg`; los recursos nativos y el icono se generan al compilar, sin dependencias adicionales.
 

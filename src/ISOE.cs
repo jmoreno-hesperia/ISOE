@@ -20,8 +20,8 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("ISOE")]
 [assembly: AssemblyProduct("Install Software on Enterprises")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.2.1.0")]
+[assembly: AssemblyFileVersion("1.2.1.0")]
 
 namespace ISOE {
     public sealed class AppEntry {
@@ -324,9 +324,17 @@ namespace ISOE {
                         WriteLog("No se pudo completar la limpieza de " + runFolder + ": " + cleanupError.Message);
                         UI(delegate { status.Text = "Proceso finalizado; quedaron temporales pendientes. Revisa el registro."; });
                     }
-                    UI(delegate { current.Style = ProgressBarStyle.Continuous; SetBusy(false); cancel.Enabled = false; });
+                    CloseAfterQueue();
                 }
             }) { IsBackground = true }.Start();
+        }
+        void CloseAfterQueue() {
+            WriteLog("ISOE se cierra automáticamente al terminar la cola y el intento de limpieza.");
+            UI(delegate {
+                current.Style = ProgressBarStyle.Continuous;
+                SetBusy(false); cancel.Enabled = false;
+                Close();
+            });
         }
         static void EnsureNoReparseAncestors(string path) {
             for (var directory = new DirectoryInfo(Path.GetFullPath(path)); directory != null; directory = directory.Parent)

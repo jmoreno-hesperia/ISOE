@@ -142,7 +142,20 @@ class ClientTests {
                 Console.WriteLine("Real x64 download and SHA-256 verified. Installer was NOT executed.");
             }
         }
-        Console.WriteLine("Client validation and UI rendering passed. No installers executed.");
+        using (var closingForm = new MainForm(true)) {
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            string closingLog = Path.GetFullPath(Path.Combine("dist", "autoclose-" + Guid.NewGuid().ToString("N") + ".log"));
+            typeof(MainForm).GetField("logFile", flags).SetValue(closingForm, closingLog);
+            bool closed = false;
+            closingForm.FormClosed += delegate { closed = true; };
+            closingForm.Show(); Application.DoEvents();
+            typeof(MainForm).GetMethod("SetBusy", flags).Invoke(closingForm, new object[] { true });
+            typeof(MainForm).GetMethod("CloseAfterQueue", flags).Invoke(closingForm, null);
+            Application.DoEvents();
+            if (!closed || !closingForm.IsDisposed) throw new Exception("Queue completion did not close the busy window");
+            if (!File.Exists(closingLog) || !File.ReadAllText(closingLog).Contains("se cierra automáticamente")) throw new Exception("Final log was not saved before closing");
+        }
+        Console.WriteLine("Client validation, cleanup, UI and automatic close passed. No installers executed.");
         return 0;
     }
 }
