@@ -1,0 +1,25 @@
+name: Añadir software a ISOE
+description: Solicitar un programa de WinGet con instalador x64 silencioso.
+title: "[Software] "
+body:
+  - type: markdown
+    attributes:
+      value: "Un mantenedor revisará la solicitud y añadirá la etiqueta new-app para tramitarla. Solo se admiten instaladores x64 silenciosos compatibles."
+  - type: input
+    id: winget-id
+    attributes:
+      label: ID de WinGet
+      placeholder: 7zip.7zip
+    validations:
+      required: true
+  - type: input
+    id: app-name
+    attributes:
+      label: Nombre
+      placeholder: 7-Zip
+    validations:
+      required: true
+  - type: input
+    id: publisher
+    attributes:
+      label: Fabricante

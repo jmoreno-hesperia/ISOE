@@ -1,0 +1,8 @@
+{
+  "apps": [
+    {"id": "Adobe.Acrobat.Reader.64-bit", "name": "Adobe Acrobat Reader", "publisher": "Adobe"},
+    {"id": "Oracle.JavaRuntimeEnvironment", "name": "Java Runtime", "publisher": "Oracle"},
+    {"id": "7zip.7zip", "name": "7-Zip", "publisher": "Igor Pavlov"},
+    {"id": "AnyDesk.AnyDesk", "name": "AnyDesk", "publisher": "AnyDesk"}
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-11-03T12:32:19.663644+00:00",
+  "apps": [
+    {
+      "id": "Adobe.Acrobat.Reader.64-bit",
+      "name": "Adobe Acrobat Reader",
+      "publisher": "Adobe",
+      "available": true,
+      "version": "26.002.22031",
+      "architecture": "x64",
+      "url": "https://ardownload3.adobe.com/pub/adobe/acrobat/win/AcrobatDC/2600222031/AcroRdrDCx642600222031_MUI.exe",
+      "sha256": "6FF26E9D58DF0E6AF633CED481A1EFFF97F17A30D2B1554D054C398E824E7C77",
+      "type": "exe",
+      "arguments": "-sfx_nu /sAll /rs /msi",
+      "successCodes": [
+        0,
+        1641,
+        3010
+      ]
+    },
+    {
+      "id": "Oracle.JavaRuntimeEnvironment",
+      "name": "Java Runtime",
+      "publisher": "Oracle",
+      "available": true,
+      "version": "8.0.5110.32",
+      "architecture": "x64",
+      "url": "https://javadl.oracle.com/webapps/download/AutoDL?BundleId=254080_ee9438f370f14316bf0d13e23c26582b",
+      "sha256": "5449042A34892DEA95788C6A86E0FEEE5B32EBF500318622733C2D492DA0D391",
+      "type": "exe",
+      "arguments": "/s REBOOT=0 SPONSORS=0 AUTO_UPDATE=0",
+      "successCodes": [
+        0,
+        1641,
+        3010
+      ]
+    },
+    {
+      "id": "7zip.7zip",
+      "name": "7-Zip",
+      "publisher": "Igor Pavlov",
+      "available": true,
+      "version": "26.05",
+      "architecture": "x64",
+      "url": "https://github.com/ip7z/7zip/releases/download/26.05/7z2605-x64.exe",
+      "sha256": "FD99E86F57D8F429EF5ED045BF98315AF962E2309B0F1BA87A147A44C71647D0",
+      "type": "exe",
+      "arguments": "/S",
+      "successCodes": [
+        0,
+        1641,
+        3010
+      ]
+    },
+    {
+      "id": "AnyDesk.AnyDesk",
+      "name": "AnyDesk",
+      "publisher": "AnyDesk",
+      "available": false,
+      "reason": "Sin instalador x64 silencioso compatible (o requiere dependencias/WinGet)."
+    }
+  ]
+}
