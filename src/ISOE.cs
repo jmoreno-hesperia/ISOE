@@ -18,6 +18,11 @@ using System.Threading;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
+[assembly: AssemblyTitle("ISOE")]
+[assembly: AssemblyProduct("Install Software on Enterprises")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
+
 namespace ISOE {
     public sealed class AppEntry {
         public string id { get; set; }
@@ -74,7 +79,7 @@ namespace ISOE {
 
         public MainForm() : this(false) { }
         public MainForm(bool preview) {
-            Text = "ISOE · Install Software on Enterprises";
+            Text = "ISOE v1.1.0 · Install Software on Enterprises";
             Size = new Size(960, 760); MinimumSize = new Size(780, 650);
             StartPosition = FormStartPosition.CenterScreen;
             Font = new Font("Segoe UI", 10); BackColor = Color.FromArgb(245, 247, 251);
