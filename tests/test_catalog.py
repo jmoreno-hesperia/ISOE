@@ -33,6 +33,17 @@ class CatalogTests(unittest.TestCase):
         data['Installers'][0]['InstallerSwitches'] = {'Silent': '/quiet'}
         self.assertEqual(select_installer(data)['arguments'], '/quiet NO_REBOOT=1')
 
+    def test_installed_identity_metadata_is_preserved(self):
+        data = self.fixture()
+        data['ProductCode'] = '{11111111-1111-1111-1111-111111111111}'
+        data['AppsAndFeaturesEntries'] = [{'DisplayName': 'Example Tool', 'Publisher': 'Example Ltd',
+            'UpgradeCode': '{22222222-2222-2222-2222-222222222222}'}]
+        item = select_installer(data)
+        self.assertIn(data['ProductCode'], item['productCodes'])
+        self.assertIn(data['AppsAndFeaturesEntries'][0]['UpgradeCode'], item['upgradeCodes'])
+        self.assertEqual(item['detectionNames'], ['Example Tool'])
+        self.assertEqual(item['detectionPublishers'], ['Example Ltd'])
+
     def test_unknown_exe_is_rejected(self):
         with self.assertRaises(ValueError):
             select_installer(self.fixture(kind='exe'))

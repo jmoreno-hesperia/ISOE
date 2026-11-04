@@ -2,6 +2,10 @@
 
 Cliente nativo y ligero para instalar software de **64 bits** en Windows, en cola y en silencio. La única excepción autorizada es **AnyDesk x86**, compatible con Windows x64. No necesita WinGet, Python ni .NET moderno en el equipo destino: utiliza .NET Framework de Windows.
 
+Desde **v1.3.0**, antes de cada descarga comprueba si el programa ya está instalado. Si lo detecta, anota **Ya instalado: omitido** y continúa sin descargar, reinstalar ni actualizar ese programa, aunque su versión sea anterior o de 32 bits. Los omitidos se contabilizan por separado en el registro.
+
+La detección consulta las entradas de programas de Windows del equipo y de la cuenta que ejecuta ISOE, tanto de 32 como de 64 bits; utiliza códigos MSI, familias de actualización y nombre/fabricante. Para Microsoft 365 comprueba los productos de Office Click-to-Run (sin confundirlos con OneDrive, Visio o el acceso web); para QuickSupport reconoce la copia portable firmada preparada por ISOE. Las aplicaciones portables copiadas en otras carpetas o productos que no registran su instalación pueden requerir una regla específica. No utiliza `Win32_Product`, para evitar comprobaciones de reparación de MSI.
+
 ## Descargar y usar
 
 1. Descarga **ISOE.exe** desde [Releases](https://github.com/jmoreno-hesperia/ISOE/releases/latest). No necesitas instalar ISOE ni copiar otros archivos.

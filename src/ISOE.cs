@@ -20,8 +20,8 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("ISOE")]
 [assembly: AssemblyProduct("Install Software on Enterprises")]
-[assembly: AssemblyVersion("1.2.2.0")]
-[assembly: AssemblyFileVersion("1.2.2.0")]
+[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyFileVersion("1.3.0.0")]
 
 namespace ISOE {
     public sealed class AppEntry {
@@ -36,6 +36,11 @@ namespace ISOE {
         public string type { get; set; }
         public string arguments { get; set; }
         public bool allowX86 { get; set; }
+        public string publisher { get; set; }
+        public string[] productCodes { get; set; }
+        public string[] upgradeCodes { get; set; }
+        public string[] detectionNames { get; set; }
+        public string[] detectionPublishers { get; set; }
         public int[] successCodes { get; set; }
     }
     public sealed class Catalog {
@@ -79,9 +84,12 @@ namespace ISOE {
         string logFile;
         string catalogDate;
         bool reboot;
+        readonly Func<AppEntry, InstalledProduct> findInstalled;
 
         public MainForm() : this(false) { }
-        public MainForm(bool preview) {
+        public MainForm(bool preview) : this(preview, InstalledSoftware.FindInstalled) { }
+        public MainForm(bool preview, Func<AppEntry, InstalledProduct> detector) {
+            findInstalled = detector;
             Text = "ISOE - Software para tu empresa";
             AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
             ClientSize = new Size(700, 520); MinimumSize = new Size(560, 450);
@@ -228,7 +236,10 @@ namespace ISOE {
             var queue = apps.Where(a => a.available && selected.Contains(a.id)).ToArray();
             if (queue.Length == 0) { status.Text = "Selecciona al menos un programa."; return; }
             string officeProduct = "O365BusinessRetail";
-            if (queue.Any(a => a.type == "office-odt")) {
+            bool needsOffice;
+            try { needsOffice = queue.Any(a => a.type == "office-odt" && findInstalled(a) == null); }
+            catch (Exception error) { WriteLog("No se pudo comprobar Office: " + error.Message); status.Text = "No se pudo comprobar Office. Revisa el registro antes de continuar."; return; }
+            if (needsOffice) {
                 using (var dialog = new Form { Text = "Microsoft 365 · Edición de tu licencia", Width = 580, Height = 245, StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false }) {
                     var info = new Label { Text = "Selecciona la edición incluida en vuestra licencia.\nSe instalará Office de 64 bits en español. Cierra Office antes de continuar.\nLa activación requiere una cuenta con la licencia correspondiente.", Left = 18, Top = 16, Width = 530, Height = 75 };
                     var edition = new ComboBox { Left = 18, Top = 100, Width = 530, DropDownStyle = ComboBoxStyle.DropDownList };
@@ -242,7 +253,7 @@ namespace ISOE {
             if (MessageBox.Show("Se procesarán " + queue.Length + " programas. Las instalaciones serán silenciosas; QuickSupport se preparará sin ejecutarlo. Al continuar aceptas sus licencias.\n\nDescargas: C:\\Temp\\ISOE. ¿Continuar?", "ISOE", MessageBoxButtons.OKCancel, MessageBoxIcon.Information) != DialogResult.OK) return;
             stop = false; reboot = false; SetBusy(true); total.Maximum = queue.Length; total.Value = 0;
             new Thread(delegate() {
-                int ok = 0, failed = 0, completed = 0;
+                int ok = 0, failed = 0, completed = 0, skipped = 0;
                 try {
                     string runId = Guid.NewGuid().ToString("N");
                     runFolder = Path.Combine(@"C:\Temp\ISOE", runId); logFile = null;
@@ -265,6 +276,11 @@ namespace ISOE {
                         if (stop) break;
                         try {
                             Validate(app);
+                            if (SkipIfInstalled(app)) {
+                                skipped++; completed++;
+                                UI(delegate { total.Value = completed; current.Style = ProgressBarStyle.Continuous; current.Value = 100; });
+                                continue;
+                            }
                             UI(delegate { current.Value = 0; current.Style = ProgressBarStyle.Continuous; status.Text = "Descargando " + app.name + "…"; });
                             WriteLog("Descargando " + app.name + " " + app.version + " (" + app.architecture + ")");
                             string file = Path.Combine(runFolder, app.id + (app.type == "msi" || app.type == "wix" ? ".msi" : ".exe"));
@@ -306,7 +322,7 @@ namespace ISOE {
                         completed++;
                         UI(delegate { total.Value = completed; current.Style = ProgressBarStyle.Continuous; current.Value = 100; });
                     }
-                    WriteLog("Instalados: " + ok + ". Errores: " + failed + ". Sin procesar: " + (queue.Length - completed) + (reboot ? ". Reinicio pendiente." : "."));
+                    WriteLog("Instalados: " + ok + ". Omitidos por estar instalados: " + skipped + ". Errores: " + failed + ". Sin procesar: " + (queue.Length - completed) + (reboot ? ". Reinicio pendiente." : "."));
                     UI(delegate { status.Text = (stop ? "Cola detenida. " : "Cola finalizada. ") + ok + " instalados, " + failed + " errores." + (reboot ? " Reinicia Windows cuando puedas." : ""); });
                 } catch (Exception ex) { failed++; WriteLog("No se pudo continuar: " + ex.Message); UI(delegate { status.Text = "Error al preparar la cola. Revisa el registro."; });
                 } finally {
@@ -320,7 +336,7 @@ namespace ISOE {
                             }
                             if (last != null) throw last;
                             WriteLog("Descargas temporales eliminadas. Registro conservado: " + (logFile ?? "no disponible"));
-                            UI(delegate { status.Text = (stop ? "Cola detenida. " : "Cola finalizada. ") + ok + " correctos, " + failed + " errores. Temporales eliminados." + (reboot ? " Reinicio pendiente." : ""); });
+                            UI(delegate { status.Text = (stop ? "Cola detenida. " : "Cola finalizada. ") + ok + " instalados, " + skipped + " omitidos, " + failed + " errores. Temporales eliminados." + (reboot ? " Reinicio pendiente." : ""); });
                         }
                     } catch (Exception cleanupError) {
                         WriteLog("No se pudo completar la limpieza de " + runFolder + ": " + cleanupError.Message);
@@ -329,6 +345,15 @@ namespace ISOE {
                     CloseAfterQueue();
                 }
             }) { IsBackground = true }.Start();
+        }
+        bool SkipIfInstalled(AppEntry app) {
+            var existing = findInstalled(app);
+            if (existing == null) return false;
+            string detail = String.IsNullOrWhiteSpace(existing.Version) ? "" : " (" + existing.Version + ")";
+            SetResult(app.id, "Omitido · ya instalado" + detail);
+            WriteLog(app.name + ": ya instalado; omitido" + detail + ".");
+            UI(delegate { status.Text = app.name + ": ya instalado, pasando al siguiente…"; });
+            return true;
         }
         void CloseAfterQueue() {
             WriteLog("ISOE se cierra automáticamente al terminar la cola y el intento de limpieza.");

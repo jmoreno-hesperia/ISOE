@@ -68,6 +68,10 @@ def select_installer(manifest, architecture="x64", allow_portable=False):
             "type": kind, "arguments": args,
             "successCodes": sorted(set([0, 1641, 3010] + merged.get("InstallerSuccessCodes", []))),
             "locale": merged.get("InstallerLocale", ""),
+            "productCodes": sorted({str(x) for x in [merged.get("ProductCode")] + [e.get("ProductCode") for e in merged.get("AppsAndFeaturesEntries", [])] if x}),
+            "upgradeCodes": sorted({str(x) for x in [merged.get("UpgradeCode")] + [e.get("UpgradeCode") for e in merged.get("AppsAndFeaturesEntries", [])] if x}),
+            "detectionNames": sorted({e["DisplayName"] for e in merged.get("AppsAndFeaturesEntries", []) if e.get("DisplayName")}),
+            "detectionPublishers": sorted({e["Publisher"] for e in merged.get("AppsAndFeaturesEntries", []) if e.get("Publisher")}),
         })
     candidates.sort(key=lambda x: (x["locale"] not in ("es-ES", "es"), x["locale"] not in ("", "en-US")))
     if not candidates:

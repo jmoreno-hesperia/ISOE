@@ -11,6 +11,42 @@ using System.Xml;
 using ISOE;
 
 class ClientTests {
+    static void DetectionTests() {
+        Func<string, string, string, bool> matches = delegate(string id, string name, string publisher) {
+            var inventory = new InstalledInventory();
+            inventory.Products.Add(new InstalledProduct { Name = name, Publisher = publisher, Version = "old", Code = "unrelated" });
+            return InstalledSoftware.Match(new AppEntry { id = id, name = id }, inventory) != null;
+        };
+        if (!matches("7zip.7zip", "7-Zip 19.00 (x86)", "Igor Pavlov")) throw new Exception("Old 32-bit 7-Zip not recognized");
+        if (matches("7zip.7zip", "7-Zip 19.00 Help", "Igor Pavlov")) throw new Exception("7-Zip helper confused with full product");
+        if (matches("7zip.7zip", "7-Zip 19.00 (x86)", "Unrelated Publisher")) throw new Exception("Wrong publisher matched");
+        if (!matches("Adobe.Acrobat.Reader.64-bit", "Adobe Acrobat Reader DC", "Adobe Systems Incorporated")) throw new Exception("Reader not recognized");
+        if (matches("Adobe.Acrobat.Reader.64-bit", "Adobe Acrobat Update Service", "Adobe Inc.") || matches("Adobe.Acrobat.Reader.64-bit", "Adobe Acrobat Reader Updater", "Adobe Inc.")) throw new Exception("Adobe updater confused with Reader");
+        if (!matches("Oracle.JavaRuntimeEnvironment", "Java 8 Update 45 (64-bit)", "Oracle Corporation")) throw new Exception("Old Java runtime not recognized");
+        if (!matches("Oracle.JavaRuntimeEnvironment", "Java(TM) 6 Update 45", "Sun Microsystems, Inc.")) throw new Exception("Legacy Java runtime not recognized");
+        if (matches("Oracle.JavaRuntimeEnvironment", "Java Auto Updater", "Oracle Corporation") || matches("Oracle.JavaRuntimeEnvironment", "Java SE Development Kit 21", "Oracle Corporation")) throw new Exception("Updater/JDK confused with JRE");
+        if (!matches("AnyDesk.AnyDesk", "AnyDesk", "AnyDesk Software GmbH")) throw new Exception("AnyDesk not recognized");
+        if (matches("TeamViewer.TeamViewer.QuickSupport", "TeamViewer", "TeamViewer Germany GmbH")) throw new Exception("Full TeamViewer confused with QuickSupport");
+        var office = new AppEntry { id = "Microsoft.Office", name = "Office" };
+        var officeInventory = new InstalledInventory(); officeInventory.OfficeProducts.Add("VisioProRetail");
+        if (InstalledSoftware.Match(office, officeInventory) != null) throw new Exception("Visio confused with Microsoft 365");
+        officeInventory.OfficeProducts.Add("O365ProPlusRetail");
+        if (InstalledSoftware.Match(office, officeInventory) == null) throw new Exception("Existing Microsoft 365 not recognized");
+        var portableInventory = new InstalledInventory { QuickSupportPrepared = true };
+        if (InstalledSoftware.Match(new AppEntry { id = "TeamViewer.TeamViewer.QuickSupport" }, portableInventory) == null) throw new Exception("Prepared QuickSupport not recognized");
+        var generic = new AppEntry { id = "Example.Tool", name = "Example Tool", publisher = "Example" };
+        var genericInventory = new InstalledInventory();
+        genericInventory.Products.Add(new InstalledProduct { Code = "{11111111-1111-1111-1111-111111111111}", Name = "Example Tool Helper", Publisher = "Example Ltd" });
+        if (InstalledSoftware.Match(generic, genericInventory) != null) throw new Exception("Helper confused with product");
+        generic.productCodes = new[] { "{11111111-1111-1111-1111-111111111111}" };
+        if (InstalledSoftware.Match(generic, genericInventory) == null) throw new Exception("Product code match failed");
+        generic.productCodes = new string[0]; genericInventory.Products[0].Name = "Example Tool 1.2 (x86)";
+        if (InstalledSoftware.Match(generic, genericInventory) == null) throw new Exception("Generic old version match failed");
+        genericInventory.Products.Clear(); generic.upgradeCodes = new[] { "{22222222-2222-2222-2222-222222222222}" };
+        if (InstalledSoftware.Match(generic, genericInventory) != null) throw new Exception("Missing MSI confused with installed");
+        genericInventory.UpgradeCodes.Add(generic.upgradeCodes[0]);
+        if (InstalledSoftware.Match(generic, genericInventory) == null) throw new Exception("Related installed MSI not recognized");
+    }
     static void CheckLayout(Form form, ListView list) {
         Application.DoEvents();
         Rectangle client = form.RectangleToScreen(form.ClientRectangle);
@@ -59,9 +95,16 @@ class ClientTests {
         }
     }
     [STAThread] static int Main(string[] args) {
+        DetectionTests();
         CleanupTests();
         var catalog = new JavaScriptSerializer().Deserialize<Catalog>(File.ReadAllText("catalog-v2.json"));
         foreach (var app in catalog.apps) if (app.available) MainForm.Validate(app);
+        if (args.Contains("--inventory-test")) {
+            foreach (var app in catalog.apps) {
+                var existing = InstalledSoftware.FindInstalled(app);
+                Console.WriteLine(app.id + ": " + (existing == null ? "not detected" : "already installed"));
+            }
+        }
         var valid = new AppEntry { id = "Test.App", architecture = "x64", sha256 = new string('A',64), type = "msi", arguments = "/qn", url = "https://example.com/app" };
         MainForm.Validate(valid);
         foreach (var arch in new[] { "x86", "neutral", "arm64" }) {
@@ -98,6 +141,19 @@ class ClientTests {
             Console.WriteLine("Vendor signatures verified without running any installers.");
         }
         Application.EnableVisualStyles();
+        using (var skipForm = new MainForm(true, delegate(AppEntry app) { return app.id == "7zip.7zip" ? new InstalledProduct { Name = "7-Zip", Version = "19.00" } : null; })) {
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var registered = catalog.apps.First(a => a.id == "7zip.7zip");
+            typeof(MainForm).GetField("apps", flags).SetValue(skipForm, new[] { registered });
+            string skipLog = Path.GetFullPath(Path.Combine("dist", "skip-installed-" + Guid.NewGuid().ToString("N") + ".log"));
+            typeof(MainForm).GetField("logFile", flags).SetValue(skipForm, skipLog);
+            typeof(MainForm).GetMethod("RenderApps", flags).Invoke(skipForm, null);
+            skipForm.Show(); Application.DoEvents();
+            bool skipped = (bool)typeof(MainForm).GetMethod("SkipIfInstalled", flags).Invoke(skipForm, new object[] { registered });
+            var skipList = (ListView)typeof(MainForm).GetField("list", flags).GetValue(skipForm);
+            if (!skipped || !skipList.Items[0].SubItems[2].Text.Contains("Omitido") || !File.ReadAllText(skipLog).Contains("19.00")) throw new Exception("Installed product was not skipped and logged");
+            if ((bool)typeof(MainForm).GetMethod("SkipIfInstalled", flags).Invoke(skipForm, new object[] { new AppEntry { id = "Missing.App" } })) throw new Exception("Missing app was skipped");
+        }
         using (var form = new MainForm(true)) {
             var flags = BindingFlags.Instance | BindingFlags.NonPublic;
             typeof(MainForm).GetField("apps", flags).SetValue(form, catalog.apps);
