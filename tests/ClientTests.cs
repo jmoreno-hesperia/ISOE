@@ -74,10 +74,12 @@ class ClientTests {
         Application.DoEvents();
         Rectangle client = form.RectangleToScreen(form.ClientRectangle);
         var buttons = Descendants(form).OfType<Button>().ToArray();
-        if (buttons.Length != 4) throw new Exception("Missing queue buttons");
+        if (buttons.Length != 5) throw new Exception("Missing action or exit button");
+        if (buttons.Select(b => b.PointToScreen(Point.Empty).Y).Distinct().Count() != 1) throw new Exception("Buttons must be in a single row");
         foreach (var button in buttons) {
             Rectangle bounds = button.RectangleToScreen(button.ClientRectangle);
-            if (!client.Contains(bounds) || button.Height < 20 || button.Width < 100) throw new Exception("Button clipped: " + button.Text);
+            Size text = TextRenderer.MeasureText(button.Text, button.Font, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+            if (!client.Contains(bounds) || button.Height < text.Height + 8 || button.Width < text.Width + button.Padding.Horizontal + 4 || button.TextAlign != ContentAlignment.MiddleCenter) throw new Exception("Button text clipped or misaligned: " + button.Text);
         }
         if (list.Columns.Cast<ColumnHeader>().Sum(c => c.Width) > list.ClientSize.Width) throw new Exception("Horizontal catalog overflow");
         if (form.Width > Screen.FromControl(form).WorkingArea.Width || form.Height > Screen.FromControl(form).WorkingArea.Height) throw new Exception("Window larger than screen");
@@ -179,18 +181,39 @@ class ClientTests {
             existing.Version = registered.version;
             bool skipped = (bool)skipMethod.Invoke(skipForm, new object[] { registered, existing, UpdatePolicy.Decide(registered, existing) });
             var skipList = (ListView)typeof(MainForm).GetField("list", flags).GetValue(skipForm);
-            if (!skipped || !skipList.Items[0].SubItems[2].Text.Contains("Omitido") || !File.ReadAllText(skipLog).Contains(registered.version)) throw new Exception("Current product was not skipped and logged");
+            if (!skipped || !skipList.Items[0].SubItems[3].Text.Contains("Omitido") || !File.ReadAllText(skipLog).Contains(registered.version)) throw new Exception("Current product was not skipped and logged");
             if ((bool)skipMethod.Invoke(skipForm, new object[] { registered, null, AppAction.Install })) throw new Exception("Missing app was skipped");
         }
-        using (var form = new MainForm(true)) {
+        bool javaNeedsUpdate = false;
+        Func<AppEntry, InstalledProduct> previewDetector = delegate(AppEntry app) {
+            if (app.id == "7zip.7zip") return new InstalledProduct { Name = "7-Zip", Version = "19.00" };
+            if (app.id == "Oracle.JavaRuntimeEnvironment") return new InstalledProduct { Name = "Java", Version = javaNeedsUpdate ? "1.0" : app.version };
+            if (app.id == "Microsoft.Office") return new InstalledProduct { Name = "Microsoft 365", Version = "16.0.19231.20194" };
+            if (app.id == "TeamViewer.TeamViewer.QuickSupport") return new InstalledProduct { Name = "QuickSupport", FileHash = app.sha256 };
+            return null;
+        };
+        using (var form = new MainForm(true, previewDetector)) {
             var flags = BindingFlags.Instance | BindingFlags.NonPublic;
-            typeof(MainForm).GetField("apps", flags).SetValue(form, catalog.apps);
-            typeof(MainForm).GetMethod("RenderApps", flags).Invoke(form, null);
+            Action apply = delegate {
+                var results = typeof(MainForm).GetMethod("InspectApplications", flags).Invoke(form, new object[] { catalog.apps });
+                typeof(MainForm).GetMethod("ApplyCatalog", flags).Invoke(form, new object[] { catalog.apps, results, catalog.updatedAt });
+            };
+            apply();
             typeof(MainForm).GetMethod("SetBusy", flags).Invoke(form, new object[] { false });
             var status = (Label)typeof(MainForm).GetField("status", flags).GetValue(form);
             status.Text = "Catálogo actualizado · " + catalog.apps.Length + " programas";
             form.Show(); Application.DoEvents();
             var list = (ListView)typeof(MainForm).GetField("list", flags).GetValue(form);
+            Func<string, ListViewItem> row = delegate(string id) { return list.Items.Cast<ListViewItem>().First(i => ((AppEntry)i.Tag).id == id); };
+            if (list.Columns.Count != 4 || !row("Adobe.Acrobat.Reader.64-bit").Checked || !row("7zip.7zip").Checked || row("Oracle.JavaRuntimeEnvironment").Checked || row("TeamViewer.TeamViewer.QuickSupport").Checked) throw new Exception("Automatic selection must select missing/outdated apps only");
+            if (row("7zip.7zip").SubItems[1].Text != "19.00" || row("7zip.7zip").SubItems[2].Text != catalog.apps.First(a => a.id == "7zip.7zip").version || row("7zip.7zip").SubItems[3].Text != "Actualizar") throw new Exception("Installed/available comparison missing");
+            row("Adobe.Acrobat.Reader.64-bit").Checked = false; apply();
+            if (row("Adobe.Acrobat.Reader.64-bit").Checked) throw new Exception("Refresh lost the user's unchecked selection");
+            javaNeedsUpdate = true; apply();
+            if (!row("Oracle.JavaRuntimeEnvironment").Checked || row("Oracle.JavaRuntimeEnvironment").SubItems[3].Text != "Actualizar") throw new Exception("Newly available update not selected");
+            javaNeedsUpdate = false; apply();
+            if (row("Oracle.JavaRuntimeEnvironment").Checked) throw new Exception("Current app should be deselected after refresh");
+            row("Adobe.Acrobat.Reader.64-bit").Checked = true;
             if (form.Text != "ISOE - Software para tu empresa" || !Descendants(form).OfType<BrandHeader>().Any()) throw new Exception("Branding missing");
             CheckLayout(form, list); Snapshot(form, "dist/preview.png");
             form.Size = new Size(560, 450); CheckLayout(form, list); Snapshot(form, "dist/preview-small.png");
@@ -226,6 +249,19 @@ class ClientTests {
                 Console.WriteLine("Real x64 download and SHA-256 verified. Installer was NOT executed.");
             }
         }
+        using (var failedDetection = new MainForm(true, delegate { throw new IOException("Fixture detection failure"); })) {
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var results = typeof(MainForm).GetMethod("InspectApplications", flags).Invoke(failedDetection, new object[] { catalog.apps });
+            typeof(MainForm).GetMethod("ApplyCatalog", flags).Invoke(failedDetection, new object[] { catalog.apps, results, "test" });
+            var list = (ListView)typeof(MainForm).GetField("list", flags).GetValue(failedDetection);
+            if (list.Items.Cast<ListViewItem>().Any(i => i.Checked)) throw new Exception("Detection errors must not select apps for installation");
+        }
+        using (var exitForm = new MainForm(true)) {
+            bool closed = false; exitForm.FormClosed += delegate { closed = true; };
+            exitForm.Show(); Application.DoEvents();
+            Descendants(exitForm).OfType<Button>().Single(b => b.Text == "Salir").PerformClick();
+            if (!closed || !exitForm.IsDisposed) throw new Exception("Exit button did not close an idle app");
+        }
         using (var closingForm = new MainForm(true)) {
             var flags = BindingFlags.Instance | BindingFlags.NonPublic;
             string closingLog = Path.GetFullPath(Path.Combine("dist", "autoclose-" + Guid.NewGuid().ToString("N") + ".log"));
@@ -234,6 +270,9 @@ class ClientTests {
             closingForm.FormClosed += delegate { closed = true; };
             closingForm.Show(); Application.DoEvents();
             typeof(MainForm).GetMethod("SetBusy", flags).Invoke(closingForm, new object[] { true });
+            typeof(MainForm).GetField("queueRunning", flags).SetValue(closingForm, true);
+            Descendants(closingForm).OfType<Button>().Single(b => b.Text == "Salir").PerformClick();
+            if (closed || closingForm.IsDisposed || !(bool)typeof(MainForm).GetField("stop", flags).GetValue(closingForm)) throw new Exception("Exit must wait for the active installer and request a safe stop");
             typeof(MainForm).GetMethod("CloseAfterQueue", flags).Invoke(closingForm, null);
             Application.DoEvents();
             if (!closed || !closingForm.IsDisposed) throw new Exception("Queue completion did not close the busy window");

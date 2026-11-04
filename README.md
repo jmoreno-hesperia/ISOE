@@ -21,7 +21,11 @@ La limpieza solo admite la carpeta propia de esa ejecución: no elimina `C:\Temp
 
 Desde **v1.2.1**, ISOE se cierra automáticamente al finalizar la cola, después de esperar a los procesos activos, guardar el resultado e intentar la limpieza. También se cierra si la cola se detiene o termina con errores. Si algún archivo sigue bloqueado, la incidencia y la ruta pendiente quedan en el registro conservado en `C:\ProgramData\ISOE\Logs`.
 
-Desde **v1.2.0**, la ventana es compacta (700 × 520 de área cliente), limita su tamaño al área útil de la pantalla, distribuye los botones en dos filas y adapta las columnas al ancho disponible. Desde **v1.2.2** utiliza el logotipo y el icono originales de Hesperia World, con cabecera azul marino, acentos azules y el texto **ISOE - Software para tu empresa**. Los originales están en `assets/` y sus fuentes se documentan en `assets/SOURCES.md`. Se incrustan en el ejecutable, sin descargas adicionales al abrirlo.
+La ventana es compacta (700 × 520 de área cliente), limita su tamaño al área útil de la pantalla y adapta las columnas al ancho disponible. Desde **v1.4.0** presenta **Programa, Instalada, Disponible y Acción**. Marca automáticamente los programas que faltan y las actualizaciones disponibles; deja sin marcar los que están al día, los más recientes y las versiones no comparables. El botón **Catálogo** renueva también la comprobación y conserva las decisiones manuales mientras la acción de cada programa no cambie. Para Office muestra la versión instalada y **Según canal** como referencia disponible, porque Microsoft decide la actualización aplicable.
+
+Los cuatro botones de acción y **Salir** están alineados en una sola fila, con altura y alineación para mantener el texto centrado. **Salir** cierra inmediatamente si no hay una instalación en curso; durante una cola, solicita detenerla, espera al proceso activo, limpia y cierra automáticamente.
+
+Utiliza el logotipo y el icono originales de Hesperia World, con cabecera azul marino, acentos azules y el texto **ISOE - Software para tu empresa**. Los originales están en `assets/` y sus fuentes se documentan en `assets/SOURCES.md`. Se incrustan en el ejecutable, sin descargas adicionales al abrirlo.
 
 La descarga tiene porcentaje real cuando el servidor comunica su tamaño. Durante la instalación se muestra actividad, porque los instaladores no ofrecen una API común para conocer un porcentaje real. Los reinicios requeridos se indican al finalizar; los parámetros silenciosos proceden del manifiesto del fabricante en WinGet.
 

@@ -20,8 +20,8 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("ISOE")]
 [assembly: AssemblyProduct("Install Software on Enterprises")]
-[assembly: AssemblyVersion("1.3.1.0")]
-[assembly: AssemblyFileVersion("1.3.1.0")]
+[assembly: AssemblyVersion("1.4.0.0")]
+[assembly: AssemblyFileVersion("1.4.0.0")]
 
 namespace ISOE {
     public sealed class AppEntry {
@@ -75,16 +75,21 @@ namespace ISOE {
         readonly Button install = new Button();
         readonly Button refresh = new Button();
         readonly Button cancel = new Button();
+        readonly Button exit = new Button();
+        readonly ToolTip buttonTips = new ToolTip();
         readonly Label count = new Label();
         readonly HashSet<string> selected = new HashSet<string>();
         AppEntry[] apps = new AppEntry[0];
         volatile bool busy, stop;
+        volatile bool queueRunning;
         bool rendering;
         string runFolder;
         string logFile;
         string catalogDate;
         bool reboot;
         readonly Func<AppEntry, InstalledProduct> findInstalled;
+        sealed class Inspection { public InstalledProduct Installed; public AppAction Action; public string Error; }
+        Dictionary<string, Inspection> inspections = new Dictionary<string, Inspection>();
 
         public MainForm() : this(false) { }
         public MainForm(bool preview) : this(preview, InstalledSoftware.FindInstalled) { }
@@ -101,7 +106,7 @@ namespace ISOE {
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 80));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 72));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 10));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 10));
@@ -111,7 +116,7 @@ namespace ISOE {
             search.Dock = DockStyle.Fill;
             search.TextChanged += delegate { RenderApps(); };
             list.Dock = DockStyle.Fill; list.View = View.Details; list.CheckBoxes = true; list.FullRowSelect = true; list.ShowItemToolTips = true;
-            list.Columns.Add("Programa", 220); list.Columns.Add("Versión", 120); list.Columns.Add("Estado", 300);
+            list.Columns.Add("Programa", 220); list.Columns.Add("Instalada", 110); list.Columns.Add("Disponible", 110); list.Columns.Add("Acción", 180);
             list.SizeChanged += delegate { FitColumns(); if (IsHandleCreated) BeginInvoke((Action)FitColumns); };
             list.ItemCheck += delegate(object sender, ItemCheckEventArgs e) {
                 if (rendering) return;
@@ -119,18 +124,27 @@ namespace ISOE {
                 if (!app.available || busy) { e.NewValue = e.CurrentValue; return; }
                 if (e.NewValue == CheckState.Checked) selected.Add(app.id); else selected.Remove(app.id);
             };
-            var buttons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = Padding.Empty };
-            buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-            buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 50)); buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            var buttons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 1, Margin = Padding.Empty };
+            foreach (float width in new[] { 31f, 17f, 14f, 24f, 14f }) buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, width));
+            buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             install.Text = "Instalar / actualizar"; install.AutoSize = true; install.Enabled = false; install.Click += delegate { StartQueue(); };
-            refresh.Text = "Actualizar catálogo"; refresh.AutoSize = true; refresh.Click += delegate { LoadCatalog(); };
-            cancel.Text = "Detener cola"; cancel.AutoSize = true; cancel.Enabled = false; cancel.Click += delegate { stop = true; cancel.Enabled = false; WriteLog("Se cancelan las descargas directas. Si Office u otro instalador está activo, se espera al fin de su fase."); };
+            refresh.Text = "Catálogo"; refresh.AutoSize = true; refresh.Click += delegate { LoadCatalog(); };
+            cancel.Text = "Detener"; cancel.AutoSize = true; cancel.Enabled = false; cancel.Click += delegate { stop = true; cancel.Enabled = false; WriteLog("Se cancelan las descargas directas. Si Office u otro instalador está activo, se espera al fin de su fase."); };
             var add = new Button { Text = "Añadir software", AutoSize = true };
             add.Click += delegate { Process.Start(new ProcessStartInfo(Repository + "/issues/new?template=add-app.yml") { UseShellExecute = true }); };
-            foreach (var button in new[] { install, refresh, cancel, add }) { button.Dock = DockStyle.Fill; button.AutoSize = false; button.Margin = new Padding(3); }
+            exit.Text = "Salir"; exit.Click += delegate { Close(); };
+            foreach (var button in new[] { install, refresh, cancel, add, exit }) {
+                button.Dock = DockStyle.Fill; button.AutoSize = false; button.Margin = new Padding(3, 4, 3, 4);
+                button.Padding = new Padding(3, 0, 3, 0); button.TextAlign = ContentAlignment.MiddleCenter;
+                button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderColor = Color.FromArgb(195, 207, 220);
+                button.UseVisualStyleBackColor = false; button.BackColor = Color.White; button.ForeColor = Brand.Ink;
+            }
             install.UseVisualStyleBackColor = false; install.BackColor = Brand.Blue; install.ForeColor = Color.White;
             install.FlatStyle = FlatStyle.Flat; install.FlatAppearance.BorderSize = 0;
-            buttons.Controls.Add(install, 0, 0); buttons.Controls.Add(refresh, 1, 0); buttons.Controls.Add(cancel, 0, 1); buttons.Controls.Add(add, 1, 1);
+            buttons.Controls.Add(install, 0, 0); buttons.Controls.Add(refresh, 1, 0); buttons.Controls.Add(cancel, 2, 0); buttons.Controls.Add(add, 3, 0); buttons.Controls.Add(exit, 4, 0);
+            buttonTips.SetToolTip(refresh, "Actualizar catálogo y comprobar las aplicaciones instaladas");
+            buttonTips.SetToolTip(cancel, "Detener la cola al terminar la operación activa");
+            buttonTips.SetToolTip(exit, "Salir; si hay una instalación activa, se espera a que termine y se limpia");
             status.Dock = DockStyle.Fill; status.AutoEllipsis = true; status.TextAlign = ContentAlignment.MiddleLeft; status.Text = "Cargando catálogo…";
             current.Dock = DockStyle.Fill; total.Dock = DockStyle.Fill;
             log.Dock = DockStyle.Fill; log.Multiline = true; log.ReadOnly = true; log.ScrollBars = ScrollBars.Vertical;
@@ -142,15 +156,16 @@ namespace ISOE {
             Controls.Add(layout);
             Shown += delegate { FitToWorkingArea(); FitColumns(); if (!preview) LoadCatalog(); };
             FormClosing += delegate(object sender, FormClosingEventArgs e) {
-                if (busy) { e.Cancel = true; stop = true; WriteLog("Espera al fin de la operación activa antes de cerrar."); }
+                if (queueRunning) { e.Cancel = true; stop = true; WriteLog("Salida solicitada: se espera al fin de la operación activa y se limpiarán las descargas."); }
             };
         }
         void FitColumns() {
-            if (list.Columns.Count != 3 || list.ClientSize.Width < 100) return;
+            if (list.Columns.Count != 4 || list.ClientSize.Width < 100) return;
             int width = Math.Max(100, list.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 4);
-            list.Columns[0].Width = (int)(width * 0.39);
-            list.Columns[1].Width = (int)(width * 0.20);
-            list.Columns[2].Width = -2;
+            list.Columns[0].Width = (int)(width * 0.35);
+            list.Columns[1].Width = (int)(width * 0.19);
+            list.Columns[2].Width = (int)(width * 0.19);
+            list.Columns[3].Width = -2;
             if (list.IsHandleCreated && list.Columns.Cast<ColumnHeader>().Sum(column => column.Width) <= list.ClientSize.Width)
                 ShowScrollBar(list.Handle, 0, false);
         }
@@ -161,7 +176,11 @@ namespace ISOE {
             Size = new Size(Math.Min(Width, width), Math.Min(Height, height));
             Location = new Point(area.Left + (area.Width - Width) / 2, area.Top + (area.Height - Height) / 2);
         }
-        void UI(Action action) { if (!IsDisposed) Invoke(action); }
+        void UI(Action action) {
+            if (IsDisposed || Disposing || !IsHandleCreated) return;
+            try { Invoke(action); }
+            catch (InvalidOperationException) { if (!IsDisposed && !Disposing && IsHandleCreated) throw; }
+        }
         void WriteLog(string message) {
             string line = DateTime.Now.ToString("HH:mm:ss") + "  " + message + Environment.NewLine;
             if (logFile != null) {
@@ -179,13 +198,38 @@ namespace ISOE {
             rendering = true; list.BeginUpdate(); list.Items.Clear();
             foreach (var app in apps.Where(a => ((a.name ?? "") + " " + a.id).IndexOf(search.Text, StringComparison.OrdinalIgnoreCase) >= 0)) {
                 var item = new ListViewItem(app.name) { Tag = app };
-                item.SubItems.Add(app.version ?? "—");
-                item.SubItems.Add(app.available ? (app.type == "portable" ? "Preparar portable · x64" : app.type == "office-odt" ? "Office x64 · Business / Enterprise" : app.architecture == "x86" ? "Listo · x86 (excepción autorizada)" : "Listo · x64") : app.reason ?? "No disponible");
-                item.ToolTipText = app.name + " · " + (app.version ?? "") + "\n" + item.SubItems[2].Text;
+                Inspection inspection; inspections.TryGetValue(app.id, out inspection);
+                string installedVersion = inspection == null ? "Comprobando…" : inspection.Error != null ? "Sin comprobar" : inspection.Installed == null ? "—" : String.IsNullOrWhiteSpace(inspection.Installed.Version) ? (app.type == "portable" ? "Preparado" : "Detectada") : inspection.Installed.Version;
+                string availableVersion = app.type == "office-odt" ? "Según canal" : app.version ?? "—";
+                string action = !app.available ? app.reason ?? "No disponible" : inspection == null ? "Comprobando…" : inspection.Error != null ? "Revisar detección" : inspection.Action == AppAction.Install ? "Instalar" : inspection.Action == AppAction.Update ? "Actualizar" : inspection.Action == AppAction.SkipCurrent ? "Al día / superior" : inspection.Action == AppAction.OfficeUpdate ? "Comprobar Office" : "Revisar versión";
+                item.SubItems.Add(installedVersion); item.SubItems.Add(availableVersion); item.SubItems.Add(action);
+                item.ToolTipText = app.name + "\nInstalada: " + installedVersion + "\nDisponible: " + availableVersion + "\n" + action + "\n" + (inspection == null ? "" : inspection.Error ?? "") + (app.architecture == "x86" ? "\nx86: excepción autorizada de AnyDesk" : "");
                 if (!app.available) item.ForeColor = Color.Gray;
                 list.Items.Add(item); item.Checked = selected.Contains(app.id) && app.available;
             }
             list.EndUpdate(); rendering = false;
+        }
+        Dictionary<string, Inspection> InspectApplications(AppEntry[] applications) {
+            var results = new Dictionary<string, Inspection>();
+            foreach (var app in applications) {
+                if (!app.available) continue;
+                try {
+                    var existing = findInstalled(app);
+                    results[app.id] = new Inspection { Installed = existing, Action = UpdatePolicy.Decide(app, existing) };
+                } catch (Exception error) { results[app.id] = new Inspection { Error = error.Message }; }
+            }
+            return results;
+        }
+        void ApplyCatalog(AppEntry[] applications, Dictionary<string, Inspection> results, string date) {
+            var previous = inspections;
+            apps = applications; inspections = results; catalogDate = date;
+            selected.RemoveWhere(id => !apps.Any(a => a.id == id && a.available));
+            foreach (var app in apps) {
+                Inspection inspection, old;
+                if (!results.TryGetValue(app.id, out inspection) || inspection.Error != null || inspection.Action == AppAction.SkipCurrent || inspection.Action == AppAction.SkipUnknownVersion) selected.Remove(app.id);
+                else if (!previous.TryGetValue(app.id, out old) || old.Error != null || old.Action != inspection.Action) selected.Add(app.id);
+            }
+            RenderApps();
         }
         void LoadCatalog() {
             SetBusy(true); cancel.Enabled = false;
@@ -196,7 +240,9 @@ namespace ISOE {
                     var catalog = new JavaScriptSerializer { MaxJsonLength = 4 * 1024 * 1024 }.Deserialize<Catalog>(json);
                     if (catalog == null || catalog.schemaVersion != 2 || catalog.apps == null) throw new InvalidDataException("Formato de catálogo no compatible.");
                     foreach (var app in catalog.apps) if (app.available) Validate(app);
-                    UI(delegate { apps = catalog.apps; catalogDate = catalog.updatedAt; selected.RemoveWhere(id => !apps.Any(a => a.id == id && a.available)); RenderApps(); status.Text = "Catálogo actualizado: " + catalogDate; });
+                    UI(delegate { status.Text = "Comprobando aplicaciones instaladas y actualizaciones…"; });
+                    var results = InspectApplications(catalog.apps);
+                    UI(delegate { ApplyCatalog(catalog.apps, results, catalog.updatedAt); status.Text = "Comparativa actualizada · " + apps.Length + " aplicaciones"; });
                 } catch (Exception ex) {
                     WriteLog("No se pudo consultar GitHub: " + ex.Message);
                     try {
@@ -205,14 +251,15 @@ namespace ISOE {
                             using (var reader = new StreamReader(stream, Encoding.UTF8)) {
                                 var embedded = new JavaScriptSerializer().Deserialize<Catalog>(reader.ReadToEnd());
                                 foreach (var app in embedded.apps) if (app.available) Validate(app);
-                                UI(delegate { apps = embedded.apps; catalogDate = embedded.updatedAt; RenderApps(); });
+                                var results = InspectApplications(embedded.apps);
+                                UI(delegate { ApplyCatalog(embedded.apps, results, embedded.updatedAt); });
                             }
                             WriteLog("Se utiliza el catálogo integrado: " + catalogDate + ". Los enlaces pueden haber cambiado; se verificará el SHA-256.");
                         }
                         UI(delegate { status.Text = "Sin actualización de GitHub. Catálogo conservado: " + catalogDate; });
                     } catch (Exception fallback) {
                         WriteLog(fallback.Message);
-                        UI(delegate { status.Text = "No hay catálogo disponible. Pulsa Actualizar para reintentar."; });
+                        UI(delegate { status.Text = "No hay catálogo disponible. Pulsa Catálogo para reintentar."; });
                     }
                 } finally { UI(delegate { SetBusy(false); cancel.Enabled = false; }); }
             }) { IsBackground = true }.Start();
@@ -251,7 +298,7 @@ namespace ISOE {
                 }
             }
             if (MessageBox.Show("Se procesarán " + queue.Length + " programas: instalación de los que faltan y actualización cuando exista una versión más reciente. QuickSupport se preparará sin ejecutarlo. Al continuar aceptas sus licencias.\n\nDescargas: C:\\Temp\\ISOE. ¿Continuar?", "ISOE", MessageBoxButtons.OKCancel, MessageBoxIcon.Information) != DialogResult.OK) return;
-            stop = false; reboot = false; SetBusy(true); total.Maximum = queue.Length; total.Value = 0;
+            stop = false; reboot = false; queueRunning = true; SetBusy(true); total.Maximum = queue.Length; total.Value = 0;
             new Thread(delegate() {
                 int ok = 0, failed = 0, completed = 0, skipped = 0, updated = 0, officeChecks = 0;
                 try {
@@ -308,7 +355,7 @@ namespace ISOE {
                                 string shortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory), "TeamViewer QuickSupport.lnk");
                                 DeployPortable(file, destination, shortcut);
                                 if (upgrading) updated++; else ok++;
-                                SetResult(app.id, upgrading ? "QuickSupport actualizado" : "Preparado · acceso directo en el escritorio");
+                                SetResult(app.id, upgrading ? "QuickSupport actualizado" : "Preparado · acceso directo en el escritorio", "Preparado");
                                 WriteLog("QuickSupport preparado sin ejecutar: " + destination);
                                 completed++; UI(delegate { total.Value = completed; current.Style = ProgressBarStyle.Continuous; current.Value = 100; });
                                 continue;
@@ -329,7 +376,7 @@ namespace ISOE {
                             if (!(app.successCodes ?? new[] { 0, 1641, 3010 }).Contains(code)) throw new InvalidOperationException("Instalador devolvió " + code + ".");
                             reboot |= code == 1641 || code == 3010;
                             if (upgrading) updated++; else ok++;
-                            SetResult(app.id, (upgrading ? "Actualizado" : "Instalado") + (code == 3010 || code == 1641 ? " · reinicio pendiente" : ""));
+                            SetResult(app.id, (upgrading ? "Actualizado" : "Instalado") + (code == 3010 || code == 1641 ? " · reinicio pendiente" : ""), app.version);
                             WriteLog(app.name + (upgrading ? ": actualizado" : ": instalado") + " (código " + code + ").");
                         } catch (OperationCanceledException) { break;
                         } catch (Exception ex) { failed++; SetResult(app.id, "Error: " + ex.Message); WriteLog(app.name + ": " + ex.Message); }
@@ -384,7 +431,7 @@ namespace ISOE {
             WriteLog("ISOE se cierra automáticamente al terminar la cola y el intento de limpieza.");
             UI(delegate {
                 current.Style = ProgressBarStyle.Continuous;
-                SetBusy(false); cancel.Enabled = false;
+                queueRunning = false; SetBusy(false); cancel.Enabled = false;
                 Close();
             });
         }
@@ -463,7 +510,9 @@ namespace ISOE {
                 link.GetType().InvokeMember("Save", BindingFlags.InvokeMethod, null, link, null);
             } finally { if (link != null) Marshal.FinalReleaseComObject(link); if (shell != null) Marshal.FinalReleaseComObject(shell); }
         }
-        void SetResult(string id, string text) { UI(delegate { foreach (ListViewItem item in list.Items) if (((AppEntry)item.Tag).id == id) item.SubItems[2].Text = text; }); }
+        void SetResult(string id, string text, string installedVersion = null) {
+            UI(delegate { foreach (ListViewItem item in list.Items) if (((AppEntry)item.Tag).id == id) { item.SubItems[3].Text = text; if (installedVersion != null) item.SubItems[1].Text = installedVersion; } });
+        }
         void Download(string url, string destination) {
             // Synchronous stream stays on the worker; UI progress is marshalled explicitly.
             var request = (HttpWebRequest)WebRequest.Create(url); request.Timeout = 60000; request.ReadWriteTimeout = 60000; request.UserAgent = "ISOE/1.0";
