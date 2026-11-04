@@ -2,9 +2,11 @@
 
 Cliente nativo y ligero para instalar software de **64 bits** en Windows, en cola y en silencio. La única excepción autorizada es **AnyDesk x86**, compatible con Windows x64. No necesita WinGet, Python ni .NET moderno en el equipo destino: utiliza .NET Framework de Windows.
 
-Desde **v1.3.0**, antes de cada descarga comprueba si el programa ya está instalado. Si lo detecta, anota **Ya instalado: omitido** y continúa sin descargar, reinstalar ni actualizar ese programa, aunque su versión sea anterior o de 32 bits. Los omitidos se contabilizan por separado en el registro.
+Desde **v1.3.1**, antes de cada descarga comprueba si el programa ya está instalado y compara su versión con la del catálogo. Si falta, lo instala; si tiene una versión anterior, ejecuta la actualización silenciosa; si la instalada es igual o superior, lo omite sin descargar ni reinstalar. No fuerza una bajada de versión. Si una versión no se puede interpretar, lo omite y deja constancia para evitar una reinstalación a ciegas. Instalados, actualizados y omitidos se contabilizan por separado en el registro.
 
 La detección consulta las entradas de programas de Windows del equipo y de la cuenta que ejecuta ISOE, tanto de 32 como de 64 bits; utiliza códigos MSI, familias de actualización y nombre/fabricante. Para Microsoft 365 comprueba los productos de Office Click-to-Run (sin confundirlos con OneDrive, Visio o el acceso web); para QuickSupport reconoce la copia portable firmada preparada por ISOE. Las aplicaciones portables copiadas en otras carpetas o productos que no registran su instalación pueden requerir una regla específica. No utiliza `Win32_Product`, para evitar comprobaciones de reparación de MSI.
+
+Para una instalación existente de **Microsoft 365**, se invoca su actualizador oficial (`OfficeC2RClient.exe`), verificando la firma de Microsoft y conservando edición, arquitectura y canal. No se compara la versión de ODT con la de Office ni se fuerza el cierre de documentos. El registro distingue la solicitud enviada de una actualización ya aplicada: el servicio de Office decide si hay novedades y puede completarlas en segundo plano o al cerrar las aplicaciones, según las políticas del equipo. Una instalación nueva sigue usando ODT. **QuickSupport** compara el hash de la copia preparada con el archivo oficial del catálogo y solo vuelve a prepararlo si cambia.
 
 ## Descargar y usar
 

@@ -11,6 +11,29 @@ using System.Xml;
 using ISOE;
 
 class ClientTests {
+    static void UpdateTests() {
+        var app = new AppEntry { id = "7zip.7zip", version = "26.05" };
+        if (UpdatePolicy.Decide(app, null) != AppAction.Install) throw new Exception("Missing product must install");
+        if (UpdatePolicy.Decide(app, new InstalledProduct { Version = "19.00" }) != AppAction.Update) throw new Exception("Older product must update");
+        if (UpdatePolicy.Decide(app, new InstalledProduct { Version = "26.5.0" }) != AppAction.SkipCurrent) throw new Exception("Equivalent version must not reinstall");
+        if (UpdatePolicy.Decide(app, new InstalledProduct { Version = "27.0" }) != AppAction.SkipCurrent) throw new Exception("Newer version must not downgrade");
+        if (UpdatePolicy.Decide(app, new InstalledProduct { Version = "unknown" }) != AppAction.SkipUnknownVersion) throw new Exception("Unknown version must not trigger blind reinstall");
+        int comparison;
+        if (!UpdatePolicy.TryCompare("Example.Tool", "1.10", "1.9", out comparison) || comparison <= 0) throw new Exception("Versions sorted lexically instead of numerically");
+        if (!UpdatePolicy.TryCompare("Example.Tool", "1.0.0-rc.1", "1.0.0", out comparison) || comparison >= 0) throw new Exception("Prerelease ordering failed");
+        if (!UpdatePolicy.TryCompare("Example.Tool", "1.0.0", "1.0.0-beta.2", out comparison) || comparison <= 0) throw new Exception("Stable version would downgrade to beta");
+        if (!UpdatePolicy.TryCompare("Oracle.JavaRuntimeEnvironment", "1.8.0_511-b32", "8.0.5110.32", out comparison) || comparison != 0) throw new Exception("Equivalent Java versions must not reinstall");
+        if (!UpdatePolicy.TryCompare("Oracle.JavaRuntimeEnvironment", "8.0.4710.9", "8.0.5110.32", out comparison) || comparison >= 0) throw new Exception("Older Java update not recognized");
+        var inventory = new InstalledInventory();
+        inventory.Products.Add(new InstalledProduct { Name = "7-Zip 19.00 (x86)", Publisher = "Igor Pavlov", Version = "19.00" });
+        inventory.Products.Add(new InstalledProduct { Name = "7-Zip 27.00 (x64)", Publisher = "Igor Pavlov", Version = "27.00" });
+        if (InstalledSoftware.Match(app, inventory).Version != "27.00") throw new Exception("A newer installed copy was ignored");
+        var portable = new AppEntry { id = "TeamViewer.TeamViewer.QuickSupport", sha256 = new string('A', 64) };
+        if (UpdatePolicy.Decide(portable, new InstalledProduct { FileHash = new string('a', 64) }) != AppAction.SkipCurrent) throw new Exception("Identical QuickSupport must be skipped");
+        if (UpdatePolicy.Decide(portable, new InstalledProduct { FileHash = new string('B', 64) }) != AppAction.Update) throw new Exception("Changed QuickSupport must update");
+        if (UpdatePolicy.Decide(new AppEntry { id = "Microsoft.Office", version = "ODT 999.0" }, new InstalledProduct { Version = "16.0.1" }) != AppAction.OfficeUpdate) throw new Exception("ODT version must not be compared with Office version");
+        if (!UpdatePolicy.OfficeUpdateArguments.Contains("forceappshutdown=false") || UpdatePolicy.OfficeUpdateArguments.Contains("updatetoversion") || UpdatePolicy.OfficeUpdateArguments.Contains("/changesetting")) throw new Exception("Office update must preserve user's applications and channel");
+    }
     static void DetectionTests() {
         Func<string, string, string, bool> matches = delegate(string id, string name, string publisher) {
             var inventory = new InstalledInventory();
@@ -95,6 +118,7 @@ class ClientTests {
         }
     }
     [STAThread] static int Main(string[] args) {
+        UpdateTests();
         DetectionTests();
         CleanupTests();
         var catalog = new JavaScriptSerializer().Deserialize<Catalog>(File.ReadAllText("catalog-v2.json"));
@@ -149,10 +173,14 @@ class ClientTests {
             typeof(MainForm).GetField("logFile", flags).SetValue(skipForm, skipLog);
             typeof(MainForm).GetMethod("RenderApps", flags).Invoke(skipForm, null);
             skipForm.Show(); Application.DoEvents();
-            bool skipped = (bool)typeof(MainForm).GetMethod("SkipIfInstalled", flags).Invoke(skipForm, new object[] { registered });
+            var existing = new InstalledProduct { Name = "7-Zip", Version = "19.00" };
+            var skipMethod = typeof(MainForm).GetMethod("SkipIfCurrent", flags);
+            if ((bool)skipMethod.Invoke(skipForm, new object[] { registered, existing, UpdatePolicy.Decide(registered, existing) })) throw new Exception("Older app incorrectly skipped instead of updating");
+            existing.Version = registered.version;
+            bool skipped = (bool)skipMethod.Invoke(skipForm, new object[] { registered, existing, UpdatePolicy.Decide(registered, existing) });
             var skipList = (ListView)typeof(MainForm).GetField("list", flags).GetValue(skipForm);
-            if (!skipped || !skipList.Items[0].SubItems[2].Text.Contains("Omitido") || !File.ReadAllText(skipLog).Contains("19.00")) throw new Exception("Installed product was not skipped and logged");
-            if ((bool)typeof(MainForm).GetMethod("SkipIfInstalled", flags).Invoke(skipForm, new object[] { new AppEntry { id = "Missing.App" } })) throw new Exception("Missing app was skipped");
+            if (!skipped || !skipList.Items[0].SubItems[2].Text.Contains("Omitido") || !File.ReadAllText(skipLog).Contains(registered.version)) throw new Exception("Current product was not skipped and logged");
+            if ((bool)skipMethod.Invoke(skipForm, new object[] { registered, null, AppAction.Install })) throw new Exception("Missing app was skipped");
         }
         using (var form = new MainForm(true)) {
             var flags = BindingFlags.Instance | BindingFlags.NonPublic;

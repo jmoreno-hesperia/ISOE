@@ -20,8 +20,8 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("ISOE")]
 [assembly: AssemblyProduct("Install Software on Enterprises")]
-[assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.0")]
+[assembly: AssemblyVersion("1.3.1.0")]
+[assembly: AssemblyFileVersion("1.3.1.0")]
 
 namespace ISOE {
     public sealed class AppEntry {
@@ -122,7 +122,7 @@ namespace ISOE {
             var buttons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = Padding.Empty };
             buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
             buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 50)); buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-            install.Text = "Instalar / preparar"; install.AutoSize = true; install.Enabled = false; install.Click += delegate { StartQueue(); };
+            install.Text = "Instalar / actualizar"; install.AutoSize = true; install.Enabled = false; install.Click += delegate { StartQueue(); };
             refresh.Text = "Actualizar catálogo"; refresh.AutoSize = true; refresh.Click += delegate { LoadCatalog(); };
             cancel.Text = "Detener cola"; cancel.AutoSize = true; cancel.Enabled = false; cancel.Click += delegate { stop = true; cancel.Enabled = false; WriteLog("Se cancelan las descargas directas. Si Office u otro instalador está activo, se espera al fin de su fase."); };
             var add = new Button { Text = "Añadir software", AutoSize = true };
@@ -250,10 +250,10 @@ namespace ISOE {
                     officeProduct = edition.SelectedIndex == 0 ? "O365BusinessRetail" : "O365ProPlusRetail";
                 }
             }
-            if (MessageBox.Show("Se procesarán " + queue.Length + " programas. Las instalaciones serán silenciosas; QuickSupport se preparará sin ejecutarlo. Al continuar aceptas sus licencias.\n\nDescargas: C:\\Temp\\ISOE. ¿Continuar?", "ISOE", MessageBoxButtons.OKCancel, MessageBoxIcon.Information) != DialogResult.OK) return;
+            if (MessageBox.Show("Se procesarán " + queue.Length + " programas: instalación de los que faltan y actualización cuando exista una versión más reciente. QuickSupport se preparará sin ejecutarlo. Al continuar aceptas sus licencias.\n\nDescargas: C:\\Temp\\ISOE. ¿Continuar?", "ISOE", MessageBoxButtons.OKCancel, MessageBoxIcon.Information) != DialogResult.OK) return;
             stop = false; reboot = false; SetBusy(true); total.Maximum = queue.Length; total.Value = 0;
             new Thread(delegate() {
-                int ok = 0, failed = 0, completed = 0, skipped = 0;
+                int ok = 0, failed = 0, completed = 0, skipped = 0, updated = 0, officeChecks = 0;
                 try {
                     string runId = Guid.NewGuid().ToString("N");
                     runFolder = Path.Combine(@"C:\Temp\ISOE", runId); logFile = null;
@@ -276,11 +276,23 @@ namespace ISOE {
                         if (stop) break;
                         try {
                             Validate(app);
-                            if (SkipIfInstalled(app)) {
+                            var existing = findInstalled(app);
+                            var action = UpdatePolicy.Decide(app, existing);
+                            if (stop) break;
+                            if (SkipIfCurrent(app, existing, action)) {
                                 skipped++; completed++;
                                 UI(delegate { total.Value = completed; current.Style = ProgressBarStyle.Continuous; current.Value = 100; });
                                 continue;
                             }
+                            if (action == AppAction.OfficeUpdate) {
+                                RequestOfficeUpdate(existing);
+                                officeChecks++; completed++;
+                                SetResult(app.id, "Actualización solicitada a Microsoft 365");
+                                UI(delegate { total.Value = completed; current.Style = ProgressBarStyle.Continuous; current.Value = 100; });
+                                continue;
+                            }
+                            bool upgrading = action == AppAction.Update;
+                            if (upgrading) WriteLog(app.name + ": actualización disponible (instalado: " + (existing.Version ?? "archivo anterior") + "; catálogo: " + app.version + ").");
                             UI(delegate { current.Value = 0; current.Style = ProgressBarStyle.Continuous; status.Text = "Descargando " + app.name + "…"; });
                             WriteLog("Descargando " + app.name + " " + app.version + " (" + app.architecture + ")");
                             string file = Path.Combine(runFolder, app.id + (app.type == "msi" || app.type == "wix" ? ".msi" : ".exe"));
@@ -295,7 +307,8 @@ namespace ISOE {
                                 string destination = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ISOE", "Tools", app.id, "TeamViewerQS.exe");
                                 string shortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory), "TeamViewer QuickSupport.lnk");
                                 DeployPortable(file, destination, shortcut);
-                                ok++; SetResult(app.id, "Preparado · acceso directo en el escritorio");
+                                if (upgrading) updated++; else ok++;
+                                SetResult(app.id, upgrading ? "QuickSupport actualizado" : "Preparado · acceso directo en el escritorio");
                                 WriteLog("QuickSupport preparado sin ejecutar: " + destination);
                                 completed++; UI(delegate { total.Value = completed; current.Style = ProgressBarStyle.Continuous; current.Value = 100; });
                                 continue;
@@ -307,7 +320,7 @@ namespace ISOE {
                                 completed++; UI(delegate { total.Value = completed; current.Style = ProgressBarStyle.Continuous; current.Value = 100; });
                                 continue;
                             }
-                            UI(delegate { current.Style = ProgressBarStyle.Marquee; status.Text = "Instalando " + app.name + "…"; });
+                            UI(delegate { current.Style = ProgressBarStyle.Marquee; status.Text = (upgrading ? "Actualizando " : "Instalando ") + app.name + "…"; });
                             var info = new ProcessStartInfo { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = runFolder };
                             if (app.type == "msi" || app.type == "wix") { info.FileName = Path.Combine(Environment.SystemDirectory, "msiexec.exe"); info.Arguments = "/i \"" + file + "\" " + app.arguments; }
                             else { info.FileName = file; info.Arguments = app.arguments; }
@@ -315,15 +328,16 @@ namespace ISOE {
                             using (var process = Process.Start(info)) { process.WaitForExit(); code = process.ExitCode; }
                             if (!(app.successCodes ?? new[] { 0, 1641, 3010 }).Contains(code)) throw new InvalidOperationException("Instalador devolvió " + code + ".");
                             reboot |= code == 1641 || code == 3010;
-                            ok++; SetResult(app.id, "Instalado" + (code == 3010 || code == 1641 ? " · reinicio pendiente" : ""));
-                            WriteLog(app.name + ": instalado (código " + code + ").");
+                            if (upgrading) updated++; else ok++;
+                            SetResult(app.id, (upgrading ? "Actualizado" : "Instalado") + (code == 3010 || code == 1641 ? " · reinicio pendiente" : ""));
+                            WriteLog(app.name + (upgrading ? ": actualizado" : ": instalado") + " (código " + code + ").");
                         } catch (OperationCanceledException) { break;
                         } catch (Exception ex) { failed++; SetResult(app.id, "Error: " + ex.Message); WriteLog(app.name + ": " + ex.Message); }
                         completed++;
                         UI(delegate { total.Value = completed; current.Style = ProgressBarStyle.Continuous; current.Value = 100; });
                     }
-                    WriteLog("Instalados: " + ok + ". Omitidos por estar instalados: " + skipped + ". Errores: " + failed + ". Sin procesar: " + (queue.Length - completed) + (reboot ? ". Reinicio pendiente." : "."));
-                    UI(delegate { status.Text = (stop ? "Cola detenida. " : "Cola finalizada. ") + ok + " instalados, " + failed + " errores." + (reboot ? " Reinicia Windows cuando puedas." : ""); });
+                    WriteLog("Instalados: " + ok + ". Actualizados: " + updated + ". Comprobaciones solicitadas a Office: " + officeChecks + ". Omitidos: " + skipped + ". Errores: " + failed + ". Sin procesar: " + (queue.Length - completed) + (reboot ? ". Reinicio pendiente." : "."));
+                    UI(delegate { status.Text = (stop ? "Cola detenida. " : "Cola finalizada. ") + ok + " instalados, " + updated + " actualizados, " + skipped + " omitidos, " + failed + " errores." + (reboot ? " Reinicia Windows cuando puedas." : ""); });
                 } catch (Exception ex) { failed++; WriteLog("No se pudo continuar: " + ex.Message); UI(delegate { status.Text = "Error al preparar la cola. Revisa el registro."; });
                 } finally {
                     try {
@@ -336,7 +350,7 @@ namespace ISOE {
                             }
                             if (last != null) throw last;
                             WriteLog("Descargas temporales eliminadas. Registro conservado: " + (logFile ?? "no disponible"));
-                            UI(delegate { status.Text = (stop ? "Cola detenida. " : "Cola finalizada. ") + ok + " instalados, " + skipped + " omitidos, " + failed + " errores. Temporales eliminados." + (reboot ? " Reinicio pendiente." : ""); });
+                            UI(delegate { status.Text = (stop ? "Cola detenida. " : "Cola finalizada. ") + ok + " instalados, " + updated + " actualizados, " + skipped + " omitidos, " + failed + " errores. Temporales eliminados." + (reboot ? " Reinicio pendiente." : ""); });
                         }
                     } catch (Exception cleanupError) {
                         WriteLog("No se pudo completar la limpieza de " + runFolder + ": " + cleanupError.Message);
@@ -346,14 +360,25 @@ namespace ISOE {
                 }
             }) { IsBackground = true }.Start();
         }
-        bool SkipIfInstalled(AppEntry app) {
-            var existing = findInstalled(app);
-            if (existing == null) return false;
+        bool SkipIfCurrent(AppEntry app, InstalledProduct existing, AppAction action) {
+            if (action != AppAction.SkipCurrent && action != AppAction.SkipUnknownVersion) return false;
             string detail = String.IsNullOrWhiteSpace(existing.Version) ? "" : " (" + existing.Version + ")";
-            SetResult(app.id, "Omitido · ya instalado" + detail);
-            WriteLog(app.name + ": ya instalado; omitido" + detail + ".");
-            UI(delegate { status.Text = app.name + ": ya instalado, pasando al siguiente…"; });
+            string reason = action == AppAction.SkipCurrent ? (app.type == "portable" ? "archivo vigente" : "versión igual o superior") : "versión instalada no comparable";
+            SetResult(app.id, "Omitido · " + reason + detail);
+            WriteLog(app.name + ": omitido; " + reason + detail + ".");
+            UI(delegate { status.Text = app.name + ": " + reason + ", pasando al siguiente…"; });
             return true;
+        }
+        void RequestOfficeUpdate(InstalledProduct existing) {
+            if (String.IsNullOrWhiteSpace(existing.UpdaterPath) || !File.Exists(existing.UpdaterPath)) throw new FileNotFoundException("No se encuentra el actualizador de Microsoft 365.");
+            InstallerSecurity.VerifyVendor(existing.UpdaterPath, "Microsoft.Office");
+            UI(delegate { current.Style = ProgressBarStyle.Marquee; status.Text = "Comprobando actualizaciones de Microsoft 365…"; });
+            WriteLog("Microsoft 365: se solicita una actualización al cliente oficial, conservando edición, arquitectura y canal.");
+            using (var process = Process.Start(new ProcessStartInfo { FileName = existing.UpdaterPath, Arguments = UpdatePolicy.OfficeUpdateArguments, UseShellExecute = false, CreateNoWindow = true })) {
+                process.WaitForExit();
+                if (process.ExitCode != 0) throw new InvalidOperationException("El actualizador de Microsoft 365 devolvió " + process.ExitCode + ".");
+            }
+            WriteLog("Microsoft 365 ha recibido la solicitud. Su servicio gestiona la descarga y aplicación de las actualizaciones según las políticas del equipo.");
         }
         void CloseAfterQueue() {
             WriteLog("ISOE se cierra automáticamente al terminar la cola y el intento de limpieza.");

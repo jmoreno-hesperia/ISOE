@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
@@ -14,12 +15,18 @@ namespace ISOE {
         public string Name { get; set; }
         public string Publisher { get; set; }
         public string Version { get; set; }
+        public string FileHash { get; set; }
+        public string UpdaterPath { get; set; }
     }
     public sealed class InstalledInventory {
         public readonly List<InstalledProduct> Products = new List<InstalledProduct>();
         public readonly List<string> OfficeProducts = new List<string>();
         public readonly HashSet<string> UpgradeCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public bool QuickSupportPrepared;
+        public string QuickSupportHash;
+        public string OfficeVersion;
+        public string OfficeUpdaterPath;
+        public readonly Dictionary<string, InstalledProduct> UpgradeProducts = new Dictionary<string, InstalledProduct>(StringComparer.OrdinalIgnoreCase);
     }
     public static class InstalledSoftware {
         const string UninstallPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
@@ -27,6 +34,8 @@ namespace ISOE {
         static extern uint MsiEnumRelatedProductsW(string upgradeCode, uint reserved, uint index, StringBuilder product);
         [DllImport("msi.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
         static extern int MsiQueryProductStateW(string product);
+        [DllImport("msi.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+        static extern uint MsiGetProductInfoW(string product, string property, StringBuilder value, ref uint length);
 
         public static InstalledProduct FindInstalled(AppEntry app) {
             return Match(app, Capture(app));
@@ -43,15 +52,25 @@ namespace ISOE {
                                         if (key == null) continue;
                                         string name = Convert.ToString(key.GetValue("DisplayName"));
                                         if (String.IsNullOrWhiteSpace(name)) continue;
+                                        string version = Convert.ToString(key.GetValue("DisplayVersion"));
+                                        if (String.IsNullOrWhiteSpace(version)) version = Regex.Match(name, @"\b\d+(?:\.\d+)+").Value;
                                         inventory.Products.Add(new InstalledProduct { Code = code, Name = name,
-                                            Publisher = Convert.ToString(key.GetValue("Publisher")), Version = Convert.ToString(key.GetValue("DisplayVersion")) });
+                                            Publisher = Convert.ToString(key.GetValue("Publisher")), Version = version });
                                     }
                                 } catch (SecurityException) { } catch (UnauthorizedAccessException) { }
                             }
                         }
                         if (hive == RegistryHive.LocalMachine)
                             using (var office = root.OpenSubKey(@"SOFTWARE\Microsoft\Office\ClickToRun\Configuration", false))
-                                if (office != null) inventory.OfficeProducts.AddRange(Convert.ToString(office.GetValue("ProductReleaseIds")).Split(','));
+                                if (office != null) {
+                                    inventory.OfficeProducts.AddRange(Convert.ToString(office.GetValue("ProductReleaseIds")).Split(','));
+                                    inventory.OfficeVersion = Convert.ToString(office.GetValue("VersionToReport"));
+                                    string clientFolder = Convert.ToString(office.GetValue("ClientFolder"));
+                                    if (!String.IsNullOrWhiteSpace(clientFolder)) {
+                                        string candidate = Path.Combine(clientFolder, "OfficeC2RClient.exe");
+                                        if (File.Exists(candidate)) inventory.OfficeUpdaterPath = candidate;
+                                    }
+                                }
                     }
             foreach (string upgrade in app.upgradeCodes ?? new string[0]) {
                 Guid id;
@@ -61,31 +80,48 @@ namespace ISOE {
                     var product = new StringBuilder(39);
                     if (MsiEnumRelatedProductsW(normalized, 0, index, product) != 0) break;
                     // Advertised MSI products are not installed and must not be skipped.
-                    if (MsiQueryProductStateW(product.ToString()) == 5) { inventory.UpgradeCodes.Add(normalized); break; }
+                    if (MsiQueryProductStateW(product.ToString()) == 5) {
+                        inventory.UpgradeCodes.Add(normalized);
+                        var version = new StringBuilder(256); uint length = 255;
+                        MsiGetProductInfoW(product.ToString(), "VersionString", version, ref length);
+                        var related = new InstalledProduct { Code = product.ToString(), Name = app.name, Publisher = app.publisher, Version = version.ToString() };
+                        InstalledProduct previous;
+                        if (!inventory.UpgradeProducts.TryGetValue(normalized, out previous) || IsNewer(app.id, related, previous)) inventory.UpgradeProducts[normalized] = related;
+                    }
                 }
             }
             if (app.id == "TeamViewer.TeamViewer.QuickSupport") {
                 string file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ISOE", "Tools", app.id, "TeamViewerQS.exe");
                 if (File.Exists(file)) {
-                    try { InstallerSecurity.VerifyVendor(file, app.id); inventory.QuickSupportPrepared = true; }
+                    try {
+                        InstallerSecurity.VerifyVendor(file, app.id); inventory.QuickSupportPrepared = true;
+                        using (var input = File.OpenRead(file)) using (var sha = SHA256.Create()) inventory.QuickSupportHash = BitConverter.ToString(sha.ComputeHash(input)).Replace("-", "");
+                    }
                     catch (InvalidDataException) { } catch (System.Security.Cryptography.CryptographicException) { }
                 }
             }
+            if (app.id == "Microsoft.Office" && String.IsNullOrEmpty(inventory.OfficeUpdaterPath))
+                foreach (var special in new[] { Environment.SpecialFolder.CommonProgramFiles, Environment.SpecialFolder.CommonProgramFilesX86 }) {
+                    string candidate = Path.Combine(Environment.GetFolderPath(special), "Microsoft Shared", "ClickToRun", "OfficeC2RClient.exe");
+                    if (File.Exists(candidate)) { inventory.OfficeUpdaterPath = candidate; break; }
+                }
             return inventory;
         }
         public static InstalledProduct Match(AppEntry app, InstalledInventory inventory) {
             if (app.id == "Microsoft.Office") {
                 if (inventory.OfficeProducts.Any(p => p.Trim().StartsWith("O365", StringComparison.OrdinalIgnoreCase)))
-                    return new InstalledProduct { Name = "Microsoft 365", Publisher = "Microsoft" };
+                    return new InstalledProduct { Name = "Microsoft 365", Publisher = "Microsoft", Version = inventory.OfficeVersion, UpdaterPath = inventory.OfficeUpdaterPath };
                 return null;
             }
             if (app.id == "TeamViewer.TeamViewer.QuickSupport" && inventory.QuickSupportPrepared)
-                return new InstalledProduct { Name = "TeamViewer QuickSupport", Publisher = "TeamViewer" };
+                return new InstalledProduct { Name = "TeamViewer QuickSupport", Publisher = "TeamViewer", FileHash = inventory.QuickSupportHash };
             var codes = new HashSet<string>((app.productCodes ?? new string[0]).Select(NormalizeCode), StringComparer.OrdinalIgnoreCase);
-            var byCode = inventory.Products.FirstOrDefault(p => !String.IsNullOrEmpty(p.Code) && codes.Contains(NormalizeCode(p.Code)));
-            if (byCode != null) return byCode;
-            if ((app.upgradeCodes ?? new string[0]).Any(c => inventory.UpgradeCodes.Any(i => NormalizeCode(i) == NormalizeCode(c))))
-                return new InstalledProduct { Name = app.name, Publisher = app.publisher };
+            var candidates = inventory.Products.Where(p => !String.IsNullOrEmpty(p.Code) && codes.Contains(NormalizeCode(p.Code))).ToList();
+            foreach (string code in app.upgradeCodes ?? new string[0]) {
+                var related = inventory.UpgradeProducts.FirstOrDefault(p => NormalizeCode(p.Key) == NormalizeCode(code));
+                if (related.Value != null) candidates.Add(related.Value);
+                else if (inventory.UpgradeCodes.Any(i => NormalizeCode(i) == NormalizeCode(code))) candidates.Add(new InstalledProduct { Name = app.name, Publisher = app.publisher });
+            }
             foreach (var product in inventory.Products) {
                 string pattern = null, publisher = null;
                 switch (app.id) {
@@ -97,16 +133,23 @@ namespace ISOE {
                 }
                 if (pattern != null) {
                     if (Regex.IsMatch(product.Name ?? "", pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
-                        (PublisherMatches(publisher, product.Publisher) || (app.id == "Oracle.JavaRuntimeEnvironment" && PublisherMatches("Sun Microsystems", product.Publisher)))) return product;
+                        (PublisherMatches(publisher, product.Publisher) || (app.id == "Oracle.JavaRuntimeEnvironment" && PublisherMatches("Sun Microsystems", product.Publisher)))) candidates.Add(product);
                     // Built-in identities must not match loosely by a friendly label.
                     continue;
                 }
                 var names = (app.detectionNames ?? new string[0]).Concat(new[] { app.name });
                 var publishers = (app.detectionPublishers ?? new string[0]).Concat(new[] { app.publisher });
                 if (names.Any(n => NormalizeName(n) == NormalizeName(product.Name)) &&
-                    (!publishers.Any(p => !String.IsNullOrWhiteSpace(p)) || publishers.Any(p => PublisherMatches(p, product.Publisher)))) return product;
+                    (!publishers.Any(p => !String.IsNullOrWhiteSpace(p)) || publishers.Any(p => PublisherMatches(p, product.Publisher)))) candidates.Add(product);
             }
-            return null;
+            InstalledProduct best = null;
+            foreach (var candidate in candidates) if (best == null || IsNewer(app.id, candidate, best)) best = candidate;
+            return best;
+        }
+        static bool IsNewer(string id, InstalledProduct candidate, InstalledProduct previous) {
+            int comparison;
+            if (UpdatePolicy.TryCompare(id, candidate.Version, previous.Version, out comparison)) return comparison > 0;
+            return !String.IsNullOrWhiteSpace(candidate.Version) && String.IsNullOrWhiteSpace(previous.Version);
         }
         static string NormalizeCode(string code) { return (code ?? "").Trim().Trim('{', '}').ToUpperInvariant(); }
         static string NormalizeName(string name) {
