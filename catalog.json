@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-11-05T06:15:17.492779+00:00",
+  "updatedAt": "2026-11-06T06:14:02.700248+00:00",
   "apps": [
     {
       "id": "Adobe.Acrobat.Reader.64-bit",
@@ -32,10 +32,10 @@
       "name": "Java Runtime",
       "publisher": "Oracle",
       "available": true,
-      "version": "8.0.5110.32",
+      "version": "8.0.5110.33",
       "architecture": "x64",
-      "url": "https://javadl.oracle.com/webapps/download/AutoDL?BundleId=254080_ee9438f370f14316bf0d13e23c26582b",
-      "sha256": "5449042A34892DEA95788C6A86E0FEEE5B32EBF500318622733C2D492DA0D391",
+      "url": "https://javadl.oracle.com/webapps/download/AutoDL?BundleId=254129_ee9438f370f14316bf0d13e23c26582b",
+      "sha256": "DEFD6BE854023499EED44EC950D4E0DAA5A26CA59A181210C4A471B3FAE626B3",
       "type": "exe",
       "arguments": "/s REBOOT=0 SPONSORS=0 AUTO_UPDATE=0",
       "successCodes": [
