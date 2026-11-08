@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-11-07T05:59:00.961254+00:00",
+  "updatedAt": "2026-11-08T05:59:58.607945+00:00",
   "apps": [
     {
       "id": "Adobe.Acrobat.Reader.64-bit",
@@ -59,10 +59,10 @@
       "name": "7-Zip",
       "publisher": "Igor Pavlov",
       "available": true,
-      "version": "26.05",
+      "version": "26.06",
       "architecture": "x64",
-      "url": "https://github.com/ip7z/7zip/releases/download/26.05/7z2605-x64.exe",
-      "sha256": "FD99E86F57D8F429EF5ED045BF98315AF962E2309B0F1BA87A147A44C71647D0",
+      "url": "https://github.com/ip7z/7zip/releases/download/26.06/7z2606-x64.exe",
+      "sha256": "9B697F65ECC2D9B0152F5EE96D72DDE522A7827690349D9307935DACF40F42EC",
       "type": "exe",
       "arguments": "/S",
       "successCodes": [
