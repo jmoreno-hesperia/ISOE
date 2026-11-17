@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-16T06:42:11.614970+00:00",
+  "updatedAt": "2026-11-17T06:15:07.243938+00:00",
   "apps": [
     {
       "id": "Adobe.Acrobat.Reader.64-bit",
@@ -126,7 +126,7 @@
       "version": "Última oficial",
       "architecture": "x64",
       "url": "https://download.teamviewer.com/download/TeamViewerQS_x64.exe",
-      "sha256": "18EBD3BB9CA69926AFF0E91D5213ECD2A7D1CA936125ADE4B373D3B91F4745EA",
+      "sha256": "EE5A29B883571F72059966184D0574C093271A5BFFE8AC226D7240FAE128A268",
       "type": "portable",
       "arguments": "",
       "successCodes": [
