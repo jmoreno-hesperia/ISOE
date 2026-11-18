@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-17T06:15:07.243938+00:00",
+  "updatedAt": "2026-11-18T06:19:30.374871+00:00",
   "apps": [
     {
       "id": "Adobe.Acrobat.Reader.64-bit",
@@ -32,10 +32,10 @@
       "name": "Java Runtime",
       "publisher": "Oracle",
       "available": true,
-      "version": "8.0.5110.33",
+      "version": "8.0.5130.4",
       "architecture": "x64",
-      "url": "https://javadl.oracle.com/webapps/download/AutoDL?BundleId=254129_ee9438f370f14316bf0d13e23c26582b",
-      "sha256": "DEFD6BE854023499EED44EC950D4E0DAA5A26CA59A181210C4A471B3FAE626B3",
+      "url": "https://javadl.oracle.com/webapps/download/AutoDL?BundleId=254205_0d75e87f2be44001b911a40e63560df4",
+      "sha256": "1F82AC0241C8D63E455C149759F92FA1BE3E1B0A79ACE323C8E73B83D79E7176",
       "type": "exe",
       "arguments": "/s REBOOT=0 SPONSORS=0 AUTO_UPDATE=0",
       "successCodes": [
@@ -44,13 +44,13 @@
         3010
       ],
       "productCodes": [
-        "{73224AE4-039E-4CA4-87B4-2F64180511F0}"
+        "{73324AE4-039E-4CA4-87B4-2F64180511F0}"
       ],
       "upgradeCodes": [
         "{57BDA5C6-443C-4D65-B233-282396418000}"
       ],
       "detectionNames": [
-        "Java 8 Update 511 (64-bit)"
+        "Java 8 Update 513 (64-bit)"
       ],
       "detectionPublishers": []
     },
@@ -106,12 +106,12 @@
       "name": "Microsoft 365 (Office)",
       "publisher": "Microsoft",
       "available": true,
-      "version": "ODT 16.0.20430.20146",
+      "version": "ODT 16.0.20527.20150",
       "architecture": "x64",
       "bootstrapArchitecture": "x86",
       "type": "office-odt",
-      "url": "https://download.microsoft.com/download/6c1eeb25-cf8b-41d9-8d0d-cc1dbc032140/officedeploymenttool_20430-20146.exe",
-      "sha256": "AF1594121AB610CD8ABC3DD6FF0A504E0CBC6CE54372E5C3813926352D1179C6",
+      "url": "https://download.microsoft.com/download/6c1eeb25-cf8b-41d9-8d0d-cc1dbc032140/officedeploymenttool_20527-20150.exe",
+      "sha256": "28BC762075C758B5EF841FE94487565168DEEED59F78DED5D5DFDFB08A9E827A",
       "arguments": "/configure",
       "successCodes": [
         0,
