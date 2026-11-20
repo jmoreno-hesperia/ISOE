@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-11-19T06:17:03.161131+00:00",
+  "updatedAt": "2026-11-20T06:20:01.263656+00:00",
   "apps": [
     {
       "id": "Adobe.Acrobat.Reader.64-bit",
@@ -44,7 +44,7 @@
         3010
       ],
       "productCodes": [
-        "{73324AE4-039E-4CA4-87B4-2F64180511F0}"
+        "{77424AE4-039E-4CA4-87B4-2F64180513F0}"
       ],
       "upgradeCodes": [
         "{57BDA5C6-443C-4D65-B233-282396418000}"

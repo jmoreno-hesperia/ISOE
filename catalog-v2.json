@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-19T06:17:03.161131+00:00",
+  "updatedAt": "2026-11-20T06:20:01.263656+00:00",
   "apps": [
     {
       "id": "Adobe.Acrobat.Reader.64-bit",
@@ -44,7 +44,7 @@
         3010
       ],
       "productCodes": [
-        "{73324AE4-039E-4CA4-87B4-2F64180511F0}"
+        "{77424AE4-039E-4CA4-87B4-2F64180513F0}"
       ],
       "upgradeCodes": [
         "{57BDA5C6-443C-4D65-B233-282396418000}"
@@ -83,10 +83,10 @@
       "publisher": "AnyDesk",
       "allowX86": true,
       "available": true,
-      "version": "9.8.3",
+      "version": "9.8.4",
       "architecture": "x86",
       "url": "https://download.anydesk.com/AnyDesk.exe",
-      "sha256": "979A295B6A68881C9AE7A70C7BA117C26316ECDF9D6AFA9DD66B048225DF5DE9",
+      "sha256": "3F5A98B1A162AE3B3ADF07DF38CD554943E79919FF4AE90B44F392959887DA22",
       "type": "exe",
       "arguments": "--install \"C:\\Program Files (x86)\\AnyDesk\" --silent --update-auto --create-desktop-icon --create-shortcuts",
       "successCodes": [
